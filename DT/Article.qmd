@@ -1,0 +1,1291 @@
+---
+title: |
+  En chemin vers la neutralité carbone. \
+  Mais quel chemin ?
+# On the way to net zero : But which way?
+format:
+  pdf:
+    toc: false
+    number-sections: true
+    colorlinks: true
+    classoption: french
+    # cite-method: biblatex
+    pdf-engine: pdflatex
+    papersize: A4
+    fig-width: 7.5
+    fig-height: 4.5
+    lang: fr
+    tbl-cap-location: top
+    fig-cap-location: top
+  docx:
+    reference-doc: template.docx
+    number-sections: true
+    lang: fr
+    fig-width: 6.3 # 16cm
+    crossref:
+      title-delim: "-"
+crossref:
+  fig-labels: roman
+  tbl-labels: arabic
+  tbl-title: Tableau
+  tbl-prefix: tableau
+  fig-prefix: figure
+  sec-prefix: section
+  subref-labels: alpha A
+  sec-labels: roman
+bibliography: biblio.bib
+csl: apa.csl
+# editor: visual
+echo: false
+# author: 
+editor: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r}
+#| include: false
+library(ggplot2)
+library(patchwork)
+library(gt)
+eco_et_stat <- FALSE
+cite_annexe <- function(num){
+  if (eco_et_stat) {
+    "Annexes en ligne"
+  } else {
+    plur <- ""
+    if (length(num) >1)
+      plur <- "s"
+    sprintf("Annexe%s %s",plur, knitr::combine_words(num, and = " et "))
+  }
+}
+cite_annexe_article <- function(num){
+  if (eco_et_stat) {
+    "les annexes en ligne"
+  } else {
+    if (length(num) >1){
+      part <- "les annexes"
+    } else {
+      part <- "l'annexe"
+    }
+    sprintf("%s %s", 
+            part,
+            knitr::combine_words(num, and = " et "))
+  }
+}
+all_graph_sens <- readRDS("images/graph/analyse_sens.RDS")
+all_table <- readRDS("images/tableaux.RDS")
+table_digits <- 1
+graph_sensibilite <- function(var, data = all_graph_sens){
+  (wrap_plots(data[[var]], ncol = 2) +
+     plot_layout(guides = "collect")) &
+    theme(plot.title = element_text(size = 10,
+                                    face="bold")) #+
+  # theme(
+  #   # minor = entre les labels
+  #   panel.grid.minor.x = element_blank(),
+  #   panel.grid.minor.y = element_blank(),
+  #   # major = au niveau des labels
+  #   panel.grid.major.x = element_blank(),
+  #   panel.grid.major.y = element_blank()
+  # )
+}
+budget_carbone_temperature <- read.csv("data/budget_carbone_temperature.csv",
+                                       header=TRUE, row.names = 1,
+                                       nrows = 2, check.names = FALSE)
+```
+
+# Résumé {.unnumbered}
+
+Avec un modèle de choix optimal d'investissement -- ou d'échouage -- en capital brun, émetteur de gaz à effet de serre, ou vert, sans émissions, nous décrivons les transitions optimales vers la neutralité carbone qui respectent des contraintes climatiques de type plafonds ponctuels d'émissions (*Fit for 55*) ou budget carbone.
+Nous montrons que i) un échouage anticipé ne peut pas se produire avec des cibles ponctuelles ; ii) pour limiter le réchauffement à un niveau donné, introduire explicitement cette contrainte sous la forme d'un budget carbone restant minimise le coût économique associé, induisant un échouage initial élevé avec des budgets limités.
+Des plafonds d'émissions réguliers dès la première année, et choisis à partir des émissions de cette trajectoire optimale, entraînent une trajectoire proche ; iii) à cumul d'émissions donné, retarder la transition augmente les coûts et l'échouage ; iv) l'investissement total durant et après la transition est inférieur à celui de l'état initial.
+
+Tous les codes utilisés sont disponibles sous <https://github.com/InseeFrLab/DT-way-to-net-zero>.
+
+\newpage
+
+# Introduction {.unnumbered}
+
+La lutte contre le réchauffement climatique exige des efforts importants pour limiter les émissions de gaz à effet de serre (GES).
+En 2015, avec l'accord de Paris, 196 parties (195 états + l'UE) se sont mis d'accord pour prendre les mesures nécessaires afin de limiter le réchauffement climatique bien en deçà de 2 °C, et de préférence sous 1.5 °C.
+D'après le GIEC, l'atteinte de la neutralité carbone au niveau mondial avant 2050 est une condition indispensable pour ne pas dépasser 1.5 °C de réchauffement, et avant 2075 pour rester sous 2 °C (@giec).
+Afin de respecter l'accord, chacune des parties a établi une feuille de route, fondée sur des engagements censés collectivement conduire à un monde neutre en émissions : les contributions décidées au niveau national.
+En France, la Stratégie française sur l'énergie et le climat (SFEC)[^1] propose un chemin de décarbonation vers zéro émission nette (ZEN) en 2050.
+Cette stratégie inclut également le respect d'un objectif intermédiaire, fixé au niveau européen, celui d'une baisse de 55 % des émissions nettes en 2030 par rapport à 1990 (paquet *Fit for 55*).
+
+[^1]: La SFEC est constituée de la loi de programmation énergie-climat (LPEC), la Stratégie nationale bas carbone (SNBC), la programmation pluriannuelle de l'énergie (PPE) et du plan national d'adaptation au changement climatique (PNACC).
+
+La hausse de la température du globe suit quasi-linéairement la hausse du stock de GES dans l'atmosphère terrestre[^2] : pour piloter la lutte contre le réchauffement climatique, il devient donc naturel de chercher à plafonner le cumul des émissions futures, directement issues des activités humaines.
+Le GIEC estime des budgets carbone résiduels pour limiter le réchauffement à un niveau donné (e.g. 1.5 ou 2 °C) avec une certaine probabilité (@giec).
+Ces budgets représentent donc des plafonds que le cumul des émissions de GES nettes futures (i.e. les émissions brutes moins les capacités d'absorption de la planète) ne doivent pas dépasser, pour maintenir le réchauffement sous un certain niveau avec une probabilité donnée.
+
+[^2]: @giec estime ainsi la sensibilité climatique (i.e. l'augmentation de la température moyenne globale résultant d'un doublement du stock de GES dans l'atmosphère) à une valeur moyenne de 3 °C.
+    Cette relation linéaire entre GES et température est valide également en projection grâce aux modélisations (cf Figure SPM.10, @giecWG1_2023).
+
+Du lien très fort entre température et stock de GES dans l'atmosphère, il découle aussi naturellement que le réchauffement ne peut être stabilisé que si le stock de GES dans l'atmosphère n'augmente plus, c'est-à-dire que le monde est neutre en carbone : les émissions brutes de GES sont alors au même niveau que les capacités d'absorption de la planète (naturelles : océans, sols et végétation ; et artificielles : technologies de captage et de séquestration du carbone).
+Les stratégies nationales de décarbonation, qui affichent un objectif de neutralité carbone, sont aussi souvent présentées comme des réponses pour limiter le réchauffement de la planète à moins de 1.5 °C (et au maximum 2 °C).
+Or la neutralité à une date donnée est atteignable par de nombreux sentiers possibles, induisant des cumuls d'émissions nettes qui peuvent être très différents en fin de transition.
+Le monde peut devenir neutre après avoir émis n'importe quel budget carbone a priori.
+En particulier, rien ne garantit que les trajectoires visant la neutralité carbone en 2050 soient cohérentes avec un réchauffement limité à 1.5 °C (ou 2 °C).
+
+La poursuite de la neutralité nécessite une action de décarbonation profonde de la consommation et des modes de production.
+Pour y parvenir, trois principaux leviers d'atténuation doivent être mobilisés : la sobriété, l'efficacité (en particulier énergétique), et la décarbonation de la production.
+Ces deux derniers leviers conduisent à substituer aux technologies carbonées des technologies « propres », peu ou non émissives (la voiture électrique, les énergies renouvelables, les logements à haute performance énergétique ou encore l'agrobiologie).
+Ces technologies existent déjà pour la plupart.
+À l'avenir le progrès technique devrait en faire apparaître de nouvelles, et rendre les modes de production verts plus compétitifs face aux carbonés.
+
+La transition pourrait également contraindre à mettre au rebut prématurément une partie du capital brun pour respecter les objectifs d'émission carbone.
+On parle alors d'actifs « échoués », car devenus sans valeur.
+Ces actifs peuvent être de trois types : les ressources naturelles (en laissant dans le sol une partie des stocks de charbon, de gaz et de pétrole), les actifs physiques (centrale à charbon ou haut fourneau dans une cimenterie) et les actifs financiers, qui dépendent des précédents (e.g. les actions et les obligations liées aux industries extractives ou aux industries intensives en énergie).
+Le @ngfs2021 a établi une typologie des scénarios de décarbonation au niveau mondial, en fonction de l'intensité et de la précocité des efforts de transition.
+Celle-ci peut s'avérer ordonnée (les efforts sont immédiats et progressifs jusqu'en 2050), désordonnée (pas d'effort avant 2030 mais rattrapage vigoureux ensuite), ou encore désordonnée et inefficace (efforts insuffisants et très variables d'un pays à l'autre).
+L'@irena2017 a proposé une estimation des actifs échoués au niveau mondial, entre 2019 et 2050 : ils représenteraient annuellement 1 point de PIB de 2019 en cas de transition désordonnée (ce chiffre baissant de moitié si elle est accomplie de manière ordonnée).
+Pour parvenir à cette estimation, deux scénarios sont comparés, l'un de transition immédiate respectant la cible de 2 °C, l'autre de transition différée à 2030 (inaction jusqu'à cette date, puis efforts redoublés jusqu'en 2050 pour atteindre le même objectif que dans le premier scénario).
+Les montants d'actifs échoués sont alors obtenus, dans une approche ascendante (*bottom up*), par différence entre les deux scénarios, secteur par secteur.
+Et d'après cette étude, c'est surtout le secteur du bâtiment qui devrait être touché dans l'Union européenne.
+
+Nous proposons ici un modèle macroéconomique stylisé visant à éclairer les enjeux liés à la transition de processus de production carbonés à d'autres plus propres, au niveau français, et à évaluer les effets de différentes stratégies de décarbonation, comme l'introduction d'une contrainte de budget carbone résiduel à respecter et/ou la fixation de plafonds d'émissions annuels.
+Nous abordons ainsi les questions suivantes : quelle stratégie d'investissements mettre en œuvre pour respecter un budget carbone compatible avec une limitation ambitieuse du réchauffement climatique ?
+Quelles sont les différences, économiques et environnementales, entre une politique fondée sur le plafonnement d'un cumul d'émissions et des politiques contraignantes sur les flux annuels (comme ZEN ou *Fit for 55*) ?
+Quel est le coût à payer selon la stratégie de décarbonation retenue ?
+Quel coût y-a-t-il à prendre du retard dans la décarbonation ?
+La transition conduit-elle nécessairement à échouer du capital brun, et si oui, dans quelle mesure et quand ?
+
+Notre modèle-jouet s'inscrit dans l'esprit du rapport @rapportpfm2023, qui encourage à l'élaboration et l'utilisation de modèles stylisés pour éclairer les grands enjeux de la transition énergétique.
+Ces modèles n'ont pas vocation à remplacer les modèles détaillés existants (ils seraient bien trop frustes, par exemple, pour évaluer un sentier de décarbonation aussi détaillé que ne le fait la SFEC) mais plutôt à éclairer des questions particulières, sur la base de jeux d'hypothèses restreints, quitte à les comparer ensuite aux résultats des modèles sectoriels et à s'interroger sur les écarts.
+Par ses chroniques d'investissements bruns et verts, les résultats de notre modèle apportent un nouvel éclairage.
+Tandis que @rapportpfm2023 privilégie une approche ascendante (*bottom up*), consistant à agréger les besoins d'investissements par secteur, notre choix de modélisation conduit à calculer des chroniques d'investissements au niveau macroéconomique (*top down*), en réponse à des contraintes et en tenant compte des effets de bouclage.
+
+Dans la lignée de @rozenberg2020 et @acemoglu2012, le modèle prend en compte deux formes de capital, selon que son utilisation pour produire émet des GES (capital brun) ou non (capital vert).
+Les quantités utilisées dans l'économie de ces deux types de capitaux dépendent des contraintes sur les émissions carbone, fixées de façon exogène.
+Dans ce cadre, la décarbonation de l'économie a lieu par le remplacement progressif du capital brun par le capital vert.
+Ces deux formes de capital participent au processus de production, mais peuvent avoir des productivités différentes et sont imparfaitement substituables.
+Une partie de la production annuelle sert à la consommation des ménages, le reste aux investissements brun et vert.
+Les chroniques de consommation, d'investissements brun et vert et de quantités de capital échoué[^3] sont décidées par un planificateur social, qui a pour objectif de maximiser le bien-être intertemporel sous contraintes d'émissions.
+L'investissement est irréversible : le planificateur ne peut transformer du capital brun en vert ou en consommation.
+En revanche il a la possibilité de jeter tout ou partie du capital brun à n'importe quelle date, contrairement à @rozenberg2020 où le capital brun peut seulement être sous-utilisé[^4].
+
+[^3]: Les énergies, fossiles comme renouvelables, ne sont pas directement modélisées comme des intrants.
+    En revanche, elles sont tout de même présentes dans l'économie, car elles sont intégrées au bien agrégé, qui est soit consommé soit investi.
+    Ceci grâce au capital installé, brun ou vert, qui inclut celui nécessaire à la production de l'énergie : ainsi une partie du capital brun sert à produire des énergies fossiles (i.e. gaz et charbon) tandis qu'une partie du capital vert sert à produire les autres énergies (nucléaires et renouvelables).
+
+[^4]: Nous n'introduisons pas cette possibilité de sous-utiliser le capital.
+    En effet, l'esprit des contraintes climatiques est de provoquer des changements suffisants pour que l'économie en fonctionnement normal soit capable de n'émettre que la contrainte choisie.
+    La sous-utilisation du capital est plutôt à envisager comme un contour possible des politiques mises en place pour décentraliser l'équilibre centralisé, que le législateur doit anticiper.
+    Pour l'équilibre centralisé, une telle stratégie ne paraît pas pertinente au niveau du planificateur central dans la recherche de trajectoires de transition optimales.
+
+Pour décarboner la production, le planificateur peut remplacer le capital brun devenu obsolète par du capital vert.
+Si les émissions doivent baisser fortement, cette stratégie ne suffit pas car les émissions ne baissent alors qu'au rythme de dépréciation naturelle du capital brun.
+Le planificateur peut alors se débarrasser d'une certaine quantité de capital brun, au prix d'une moindre production future.
+Finalement, le modèle permet d'examiner la façon dont les investissements, brun et vert, et les stocks de capital évoluent dans le temps, en fonction du type et de la sévérité de la contrainte propre à chaque scénario de décarbonation.
+Le calibrage se fait au niveau français : en particulier, une estimation stylisée de la part initiale du capital brun dans le capital productif est proposée, sur la base des comptes nationaux et des chroniques d'investissements climat d'@panoramai4CE.
+On considère ainsi que ces investissements représentent le montant total qu'il faudra mobiliser, dans le cadre de la transition, pour remplacer le capital brun excédentaire (celui dépassant les capacités du puits de carbone), ce qui nous permet d'estimer la valeur du capital brun de départ à son coût de remplacement.
+Par rapport à @rozenberg2020, notre modèle est donc calibré, et ce au niveau France.
+
+Les résultats des simulations doivent être interprétés avec prudence, car ils sont intrinsèquement liés au cadre de modélisation et au choix des paramètres retenus, dont certains sont encore mal connus dans la littérature.
+Une approche ascendante pourrait avoir des conclusions différentes sur l'échouage mis en évidence dans certaines simulations.
+Les nombreuses analyses de robustesse menées révèlent d'ailleurs que les résultats obtenus sont parfois sensibles au paramétrage.
+Il s'agit donc de proposer des ordres de grandeur, sous un certain jeu d'hypothèses, des efforts induits par la transition et de leur répartition dans le temps, ainsi qu'une illustration des mécanismes économiques à l'œuvre lorsque différentes politiques d'atténuation sont mises en place.
+En outre, le modèle reste très stylisé et dévoile l'équilibre centralisé, il ne prend pas en compte les instruments de décentralisation de cet équilibre centralisé et les imperfections de marchés qui pourraient compliquer l'atteinte de cet équilibre dans un monde décentralisé.
+Par conséquent, les simulations représentent probablement une borne basse des coûts de la transition.
+Enfin, les résultats en termes de réchauffement mondial reposent sur l'hypothèse que dans les autres pays, les émissions cumulées restent également inférieures au budget correspondant à ce réchauffement.
+De fait, l'action en France ne renseigne que sur la part de la France aux efforts mondiaux de limitation du réchauffement^[Le modèle décrit les émissions à la production nationale, c’est-à-dire l’inventaire national de GES, sur lequel portent les engagements internationaux. L’inventaire national diffère de l’empreinte carbone, qui correspond aux émissions liées à la consommation nationale (en excluant les émissions liées aux exportations et en intégrant celles liées aux importations)].
+Ils reposent aussi sur l'estimation des budgets carbone restants et le lien température-GES projeté pour des niveaux de GES supérieurs à ce qui est observé.
+Les équivalences entre émissions cumulées de GES en France et réchauffement mondial sont données à titre illustratif.
+
+Nos simulations permettent de comparer les conséquences de différents objectifs de décarbonation sur la chronique optimale des investissements bruns et verts et des actifs échoués en France, entre 2022 et 2050 (année de réalisation visée de la neutralité carbone).
+Un scénario de référence, d'inaction climatique, est construit, dépourvu de toute contrainte sur les émissions.
+Puis quatre scénarios de décarbonation sont évalués, partageant tous l'objectif ZEN à partir de 2050, avec pour cibles : 1) l'objectif ZEN uniquement, 2) la baisse de 55 % des émissions nettes en 2030 par rapport à leur niveau de 1990 (*Fit for 55*), 3) *Fit for 55* en 2030 et la baisse de 90 % des émissions nettes en 2040, et 4) la mise en place d'un budget carbone national compatible avec l'objectif le plus ambitieux de l'accord de Paris (+ 1.6 °C de réchauffement).
+Puis une série de scénarios, proposant d'évaluer les effets de l'intensification du ciblage par plafonds annuels d'émissions est présentée, avec un ciblage tous les dix, cinq puis deux ans.
+Enfin, trois scénarios de transition retardée sont évalués, selon la date du début de la gestion intertemporelle optimale du budget carbone restant (2023, 2028 ou 2033).
+
+Avec les trajectoires optimales, et en retenant les équivalences mentionnées entre émissions et réchauffement, le scénario ZEN est compatible avec un réchauffement à 1.8 °C, le scénario Fit for 55 à 1.75 °C, et celui Fit for 55 + 90 à 1.65 °C.
+Parmi les différents scénarios étudiés, c'est avec la gestion intertemporelle d'un budget carbone que la montée en charge de l'investissement vert est la plus précoce.
+Dès la première année, l'investissement brun disparaît, engageant ainsi rapidement la transition.
+En revanche, avec le seul objectif ZEN, l'investissement brun survit plusieurs années, retardant ainsi la transition.
+Ce n'est qu'à partir de 2027 qu'il disparaît, en même temps que le vert se déploie enfin.
+L'ajout de l'objectif *Fit for 55* en 2030 permet bien d'avancer la transition et d'accélérer la disparition de l'investissement brun, mais elle suscite également l'apparition d'un phénomène indésirable de *stop and go* : l'investissement brun réapparaît provisoirement en 2030 et continue juste après, avant de disparaître définitivement.
+L'ajout à ce dernier scénario d'une cible en 2040 de baisse des émissions nettes de 90 % élimine ce phénomène : l'investissement brun ne redémarre pas juste après le point de passage 2030, ni après le point de passage 2040 d'ailleurs.
+
+Ces premiers scénarios permettent également d'illustrer un enseignement fondamental du modèle : un échouage anticipé n'est jamais optimal avec des plafonds ponctuels d'émissions, ainsi l'échouage de capital brun ne s'observe qu'en 2050 avec le seul objectif ZEN, en 2030 et 2050 avec l'ajout de *Fit for 55*, et en 2030, 2040 et 2050 avec un plafond supplémentaire en 2040.
+Ces contraintes ponctuelles ne permettent pas naturellement d'étaler les efforts dans le temps, ce qui peut compliquer leur implémentation.
+Au contraire la gestion optimale d'un budget carbone dans le temps s'accompagne d'échouages qui peuvent avoir lieu chaque année et être massifs la première année avec un objectif climatique ambitieux.
+
+Un autre enseignement du modèle est que, dans tous les scénarios de transition, l'investissement total est en moyenne inférieur à ce qu'on observe initialement.
+En effet, la fonction de production étant concave en fonction du capital, le stock de capital étant déterminé par sa productivité marginale nécessairement égale à $\rho + \delta$ (actualisation + dépréciation), et le capital vert étant moins productif que le brun, le stock de capital vert et brun résiduel à l'état final post transition est inférieur au stock de capital brun et vert initial.
+Par rapport à l'état initial, l'investissement total est donc forcément plus faible à l'équilibre final, et il ressort aussi plus faible en moyenne durant la transition dans tous les scénarios étudiés.
+
+Pour atteindre un objectif de réchauffement maximal donné (un cumul d'émissions donné), introduire explicitement cette contrainte, sous la forme d'un budget carbone restant, permet de minimiser le coût économique associé.
+Une trajectoire proche d'une telle trajectoire optimale associée au respect d'un budget carbone peut être obtenue avec des plafonds d'émissions régulièrement espacés dans le temps, qui s'appliquent dès la première année, et choisis à partir de la chronique d'émissions de cette trajectoire optimale.
+Quand l'objectif climatique est ambitieux, rapprocher dans le temps ces jalons intermédiaires réduit la dérive qui peut se produire entre ces jalons.
+
+Enfin, la transition est d'autant plus coûteuse qu'elle est tardive.
+Nous comparons des scénarios de transition différée[^5] : objectif ZEN dans un premier temps puis démarrage de la transition à partir d'une certaine date pour respecter le budget restant compatible avec un réchauffement à 1.6 °C.
+Plus cette date est tardive, plus une part importante de ce budget est déjà consommée, et plus le stock de capital brun doit être réduit pour émettre très peu de GES sur la durée restante avant 2050.
+Ainsi, l'année du passage à la gestion du budget carbone restant, l'échouage est deux fois supérieur avec un changement de politique en 2028 plutôt qu'en 2023, et trois fois supérieur avec un changement en 2033.
+La consommation est inférieure d'1 % en moyenne sur la période de transition dans le cas d'un changement de politique retardé à 2033 plutôt que 2023.
+
+[^5]: Nos scénarios de transitions différées se distinguent de ceux de l'IRENA (@irena2017) pour la période de pré-transition.
+    Pour l'IRENA, jusqu'en 2030, c'est un *business as usual* qui est mis en place.
+    Dans nos simulations, en revanche, la période de pré-transition est une trajectoire ZEN, déjà compatible avec l'objectif 1.8 °C (d'après nos simulations) mais insuffisante pour 1.6 °C.
+
+Avec tous les différents types de contraintes sur les émissions de GES, les trajectoires optimales font souvent apparaître des échouages très importants une année donnée.
+Il est probable que pour réduire les conflits intergénérationnels qui en découlent, l'effort soit lissé dans le temps.
+Nous introduisons donc un coût à échouer du capital dans la fonction d'utilité, quadratique en la quantité de capital échoué.
+L'échouage est alors plus ou moins étalé dans le temps selon l'importance de ces coûts, reflétant des chroniques plus réalistes, par leurs montants comme par leur profil temporel.
+Avec des coûts élevés à l'échouage, qui limitent la baisse du capital brun en début de période, les émissions baissent plus lentement qu'avec des coûts modérés ou nuls, l'économie doit donc être plus proche de la neutralité en fin de période pour compenser le surcroît d'émissions du début de période.
+
+Après une revue de littérature (@sec-litterature), nous présentons le fonctionnement du modèle en @sec-modele, puis décrivons nos différents résultats en @sec-resultats.
+La @sec-conclusion conclut.
+
+# Revue de littérature {#sec-litterature}
+
+De nombreux modèles macroéconomiques s'intéressent à la transition énergétique.
+Le plus célèbre, DICE (@dice2023 dans sa version la plus récente), de niveau mondial, produit à la fois une cible climatique (un réchauffement « optimal », au sens de l'analyse coûts-bénéfices ou coûts-dommages) et un sentier de prix du carbone pour y parvenir.
+Son approche est dite « intégrée » car il contient une boucle de rétroaction entre économie et climat : les activités humaines produisent des émissions de GES, dont la concentration augmente dans l'atmosphère, ce qui réchauffe la température moyenne et cause des dommages dont une partie est mesurable économiquement.
+L'évaluation des dommages effectuée dans les modèles intégrés fait l'objet de nombreuses critiques, en particulier sur la non prise en compte des points de bascule climatiques, qui pourraient entraîner des effets non linéaires sur le PIB, et non prévisible à partir des variations climatiques passées ou présentes.
+D'où un risque important de sous-estimation (@stiglitzstern).
+Ainsi, @dice2023 prédit une baisse de PIB de 12.5 % seulement en cas de hausse de la température moyenne globale de 6 °C, soit un changement radical de climat.
+Cette approche intégrée n'est du reste pas pertinente pour un modèle français, en raison du faible poids de la France dans les émissions mondiales (moins de 1 %) : en effet, la concentration atmosphérique en GES est insuffisamment sensible aux efforts d'atténuation nationaux.
+En outre, l'analyse coûts-bénéfices menée dans ce type de modèle endogénéise la cible climatique.
+Or depuis l'accord de Paris il paraît plus fondé de considérer celle-ci comme exogène, car non seulement le plafonnement du réchauffement à 1.5 °C (2 °C maximum) correspond à un consensus scientifique mais il fait désormais l'objet d'un engagement politique au niveau international.
+
+En France, deux modèles régulièrement mobilisés pour l'évaluation macroéconomique de la SNBC, ThreeME (@ThreeMe) et IMACLIM-R-France (@Bibas2022), proposent une désagrégation sectorielle poussée de l'économie française.
+Leur caractère détaillé permet d'évaluer un large éventail de mesures de transition : réglementations, taxe carbone, investissements verts, décarbonation du bouquet énergétique... Ces modèles s'appuient sur de nombreuses hypothèses : sur les comportements des ménages et des entreprises, mais aussi sur l'ajustement de l'offre et de la demande sur les marchés, ou encore la valeur des multiplicateurs budgétaires.
+La compréhension et l'analyse des résultats qui en sont issus s'avèrent parfois délicates, car il peut être difficile de mesurer le rôle respectif de chaque hypothèse.
+En outre, leur résolution se fait de manière statique, à chaque date, sans tenir compte de l'effet des anticipations sur les mécanismes de la transition.
+Les difficultés liées à l'utilisation et à la compréhension des résultats de ces modèles incitent à recourir, de façon complémentaire, à des modèles stylisés, à l'interprétation plus simple[^6].
+
+[^6]: @germainlellouch2020 adopte cette approche et s'appuie sur un modèle stylisé pour évaluer les trajectoires optimales de réduction des émissions dans le cadre d'un modèle d'optimisation intertemporelle à partir d'hypothèses plus générales sur les technologies de décarbonation.
+    Notre approche complète la leur en mettant l'accent sur les transformations du capital productif et les perspectives d'échouage du capital émissif.
+
+Notre travail reprend un cadre de modélisation connu.
+Concernant la fonction de production, déjà dans @acemoglu2012, deux formes de capital, un brun et un vert (le premier émissif, pas le second), sont combinées dans le secteur productif.
+Mais contrairement à notre modèle les auteurs introduisent un progrès technique endogène.
+Leurs résultats montrent que la taxation du brun et les subventions au vert permettent d'orienter le progrès technique vers celui-ci.
+La conséquence en est une baisse de la productivité globale à court terme, du fait du retard technologique du vert sur le brun.
+Dans ce contexte, il devient rentable d'engager la transition énergétique au plus vite : plus elle est précoce, plus la différence de productivité entre les deux technologies est faible et le retard vite rattrapé.
+Ce type de modélisation a été repris par @rozenberg2020, qui y ajoutent la possibilité de sous-utiliser le capital brun sous l'effet des contraintes climatiques, ce qui revient à l'échouer si ces contraintes sont permanentes.
+Leur étude compare les performances respectives d'une série d'instruments (taxe carbone optimale, taxe carbone progressive, réglementation, subventions) et fait apparaître l'existence d'un arbitrage entre maximisation du bien-être inter-temporel (garantie par la taxe carbone) et faisabilité politique d'un sentier de décarbonation (mieux assurée par des politiques de second rang, qui ont pour avantage de limiter la sous-utilisation du capital brun et donc les pertes essuyées par ses propriétaires)[^7].
+
+[^7]: Il existe également une littérature qui présente un cadre de modélisation apparenté au nôtre, et étudie l'ordre dans lequel différentes ressources, fossiles et renouvelables, sont mobilisées en cas de contrainte sur les émissions (@CHAKRAVORTY20062875).
+    Ces travaux aboutissent à des chroniques d'extraction optimales de ressources disponibles en quantités limitées.
+    Dans la lutte contre le réchauffement climatique, la contrainte n'est pas sur la rareté de la ressource, car une partie des ressources fossiles doit être laissée dans le sol pour respecter les objectifs climatiques.
+    Mais notre analyse se rapproche malgré tout de ces travaux, dans la mesure où le budget carbone renseigne implicitement sur un stock maximal de ressources fossiles qu'il est possible d'extraire.
+    En considérant les ressources fossiles comme un capital naturel, la partie qui ne doit pas être extraite représente alors des actifs échoués.
+
+La littérature macroéconomique récente représente l'échouage du capital de deux façons.
+Elle peut le faire de manière exogène, en s'appuyant sur des chroniques d'actifs échoués estimées hors modèle.
+C'est le cas par exemple d'une évaluation menée à partir de ThreeME (à paraître), sur les conséquences économiques d'un scénario de transition retardée à 2030, qui s'appuie sur les estimations d'échouage du capital au niveau mondial par l'IRENA (@irena2017), après estimation de la part de la France.
+Sur cette base, des chroniques d'investissements négatifs ont été introduites et leurs conséquences économiques évaluées.
+Mais l'échouage d'actifs peut également être endogène : dans ce cas il est le résultat d'un calcul rationnel face à une nouvelle contrainte.
+Dans le modèle d'inspiration néo-keynésienne de @JACKSONANDREW2020Ascf, le niveau de capital à un moment donné dépend des décisions passées.
+L'introduction d'une contrainte sur les émissions peut faire baisser la quantité optimale de capital brun à utiliser sous celle détenue.
+Dans ce cas, le niveau de capital échoué se mesure à son sous-emploi.
+Dans un cadre différent, c'est aussi l'idée de @rozenberg2020 : si à long terme la décarbonation se fait par l'investissement dans le vert, à court terme elle passe aussi par une sous-utilisation du brun.
+Comme eux, nous reprenons cette idée d'endogénéité de la décision d'échouage : mais à leur différence, quand le capital brun est échoué, nous considérons qu'il est tout simplement mis au rebut (comme cela pourrait être le cas à l'avenir de centrales à charbon, de véhicules thermiques ou de bâtiments à la rénovation énergétique trop coûteuse) et non seulement sous-employé.
+
+# Présentation du modèle {#sec-modele}
+
+## Secteur productif
+
+Chaque année $t$, l'économie évolue suivant les différentes étapes suivantes :
+
+1.  Au début de l'année $t$, le capital disponible est $K_{t-1}^i$ ($i=b$ (brun) ou $v$ (vert)), issu de l'accumulation du capital jusqu'à la date précédente.
+    À ce moment, un montant de capital brun, $\phi_t^b$, peut être mis au rebut (capital échoué), de sorte que seul le capital brun restant $K_{t-1}^b-\phi_t^b$ est utilisé pour la production.
+
+2.  Une quantité de bien est produite, dépendant du capital brun encore disponible et du capital vert, $Y_t=F(K^{b}_{t-1}-\phi_t^b,K^v_{t-1},\overline{L})$, où $\bar{L}$ correspond à la population, supposée ici stable et constante dans le temps[^8].
+    La présence du facteur travail permet, si on le souhaite et comme c'est souvent le cas dans les modèles de type Ramsey, de se placer dans un cadre où les rendements d'échelle sont constants, tout en ayant décroissance des rendements du capital.
+
+3.  Une fois la production réalisée, les niveaux de consommation $C_t$ et d'investissements $I_{t}^i$ ($i=b,v$) peuvent être choisis, avec comme contrainte que $C_t+I_t^b+I_t^v\leq Y_t$.
+
+4.  Une fraction $\delta$ du capital disparaît.
+
+[^8]: Il serait possible d'introduire un taux de croissance exogène de la population, mais cela ajouterait une complexité inutile au modèle.
+
+Finalement, la dynamique d'investissement conduit à une accumulation du capital brun et du vert représentée par les équations suivantes : $$
+\begin{cases}
+K_t^b = \left(1-\delta\right)\left(K_{t-1}^b-\phi_t^b\right)+I_t^b \\
+K_t^v = \left(1-\delta\right)K_{t-1}^v+I_t^v
+\end{cases}.
+$$
+
+Dans notre choix de modélisation, les deux formes de capital ne sont pas exclusives l'une de l'autre : elles coexistent dans l'économie.
+À l'équilibre stationnaire, leur part respective dépend de leur productivité et de leur substituabilité.
+L'utilisation de capital brun pour la production émet des GES, l'utilisation du capital vert n'en émet pas.
+Ainsi, les émissions brutes de l'année $t$ sont égales à $e_b \left(K_{t-1}^{b}-\phi_t^b\right)$, où $e_b$ est l'émissivité moyenne, c'est-à-dire l'émission de GES générée par l'utilisation d'une unité de capital brun.
+
+L'objectif ZEN autorise la survie du capital brun au-delà de 2050.
+Mais à un niveau contraint par la capacité du puits de carbone : les émissions du capital brun doivent juste le saturer.
+Pour en rendre compte dans le modèle, une partie du capital brun est considérée comme "résiduelle", i.e. sa quantité est calculée de sorte que ses émissions saturent exactement la capacité du puits ; comme le puits de carbone est considéré constant, le capital résiduel est aussi constant, un investissement brun résiduel compensant exactement chaque année sa dépréciation.
+On note $\underline{K}^b$ le capital brun résiduel, tandis que le non résiduel est noté $\tilde{K}_t^b$.
+On a donc : $K_t^b=\tilde{K}^b_t+\underline{K}^b$.
+Le niveau d'investissement brun résiduel est égal à $\delta \underline{K}^b$, et les émissions nettes $e_t$ sont celles émises par le capital brun non résiduel (et qui est le seul concerné par l'échouage): $e_t=e_b( \tilde{K}_{t-1}^b-\phi_t^b)$
+
+La dynamique d'accumulation du capital présentée dans cette section correspond à celle du modèle canonique de Ramsey (cf. @ramsey1928 et @merceniermichel1994) : à chaque date, il s'agit d'arbitrer entre la consommation courante et l'investissement, qui servira à la consommation future.
+Ici, l'existence de deux types de capital introduit une autre considération : la nécessité de remplacer un type de capital par un autre.
+Cela peut se faire en laissant disparaître naturellement le capital brun et en le remplaçant progressivement par du capital vert, en préservant au mieux le niveau de consommation.
+Ces décisions de remplacement conduisent naturellement à diminuer le potentiel de l'économie, dans la mesure où elles ne sont pas induites par l'efficacité relative des deux types de capital.
+Par ailleurs, l'urgence de la transition peut nécessiter de faire baisser les émissions à un rythme plus rapide que le taux de dépréciation du capital brun : une partie de ce capital brun peut alors être mise au rebut.
+La section suivante décrit les contraintes portant sur les émissions, poussant le planificateur à se débarrasser plus ou moins rapidement du capital brun.
+
+## Contraintes sur les émissions
+
+Les ambitions de lutte contre le réchauffement climatique se traduisent par des contraintes sur les émissions nettes de GES.
+Leur introduction favorise le capital vert au détriment du brun dans le processus productif.
+
+Trois types de contraintes sont considérées :
+
+1.  La contrainte de ZEN : elle est commune à tous les scénarios de décarbonation et détermine l'état stationnaire terminal.
+    À partir de l'année $T_E$: $K_t^b=\underline{K}^b$, après que le planificateur s'est débarrassé du capital brun non résiduel au début de $T_E$ : $\phi_{T_E}=K_{T_E-1}^b-\underline{K}^b$.
+    $$ 
+    \forall t\geq T_E, e_t=0.
+    $$
+
+2.  Un budget carbone, sur les émissions nettes cumulées, compatible avec une limitation du réchauffement climatique à un niveau donné : $$
+    \sum_{t=t_0+1}^{T_E}e_t \leq E_{\max},
+    $$ {#eq-budget-carbone} où $t_0$ est l'année de base et la date d'introduction de la contrainte dans l'économie.
+    Dans les applications, nous partirons de $t_0=2022$, et considérerons dans la plupart des situations un budget carbone compatible avec un réchauffement inférieur à 1.6 °C ou 1.8 °C avec probabilité 50 %.
+
+3.  Les contraintes ponctuelles sur les flux d'émissions nettes l'année $t_l$, telles que $e_{t_l} \leq \underline{e_{t_l}}$.
+    Par exemple, *Fit for 55* en 2030 : $e_{2030} \leq 0.45 \times e_{1990}$.
+
+Le modèle repose sur l'hypothèse que, une fois connues, les contraintes sont parfaitement anticipées, ce qui permet au planificateur d'établir des chroniques d'investissements brun et vert pour toute la période.
+D'une certaine manière, un choc sur l'économie a lieu au moment où les contraintes sont révélées, et le modèle décrit justement les conséquences de ce choc.
+La section suivante précise comment les décisions d'investissement sont prises.
+
+## Programme du planificateur social
+
+On suppose que les décisions d'investissement et de consommation sont prises par un planificateur social, qui maximise la somme intertemporelle actualisée des utilités tirées de la consommation à chaque date ($u(C_{t})$), sous contraintes.
+L'équilibre est atteint, par résolution du programme suivant, assorti des contraintes ci-dessous : $$
+\max\limits_{
+\substack{\tilde{I}^b_{t_0+1},\ldots,\tilde{I}^b_{T_E}\geq 0\\
+\phi^b_{t_0+1},\ldots,\phi^b_{T_E}\geq 0\\
+I^v_{t_0+1},\ldots,I^v_t,\ldots \geq 0
+}} \sum\limits_{t=t_0+1}^{+\infty}\frac{u\left(C_t\right)}{(1+\rho)^{t-t_0}}.
+$$
+
+-   Équilibre ressources-emplois : $$
+    F(K_{t-1}^b-\phi_t^b,K_{t-1}^v,\bar{L}) 
+    = C_t +\tilde{I}_t^b + \delta \underline{K}^b+I_t^v.
+    $$ Ce qui est produit à l'aide du capital installé (duquel on enlève le capital échoué $\phi_t^b$) est utilisé pour consommer et pour investir en capital brun (y compris résiduel) ou vert à la date $t$.
+
+-   Accumulation des capitaux brun et vert : $$
+    \begin{cases}
+    K^b_t=\tilde{K}^b_t+\underline{K}^b \\
+    \tilde{K}^b_{t}=(1-\delta)(\tilde{K}^b_{t-1}-\phi_t^b)+\tilde{I}_t^b\\
+    K^v_{t}=(1-\delta) K^v_{t-1}+I_t^v\\
+    0 \leq \phi_t^b \leq \tilde{K}_{t-1}^b
+    \end{cases}.
+    $$ Ces équations décrivent la dynamique d'accumulation du capital brun non résiduel et du capital vert.
+    Le capital brun résiduel reste constant : il n'y est investi ( $\delta \underline{K}^b$) que pour le renouveler.
+
+-   Accumulation des émissions nettes de carbone : $E_t=E_{t-1}+e_t$, avec $e_t=e_b(\tilde{K}^b_{t-1}-\phi_t^b)$.
+
+-   Contrainte ZEN : $\phi^b_{T_E}=\tilde{K}^b_{T_E-1}$, puis $\forall t\geq T_E$ : $\tilde{K}^b_t=\tilde{I}_t^b=0$ et $K_t^b=\underline{K}_b$, et $\forall t\geq T_E+1$: $\phi_t^b=0$.
+
+-   Contraintes ponctuelles sur les émissions annuelles : $e_{t_l} \leq \bar{e}_{t_l}, \phi_{t_l}^b = \max\left(\tilde{K}_{t_l-1}^b-\frac{\bar{e}_{t_l}}{e_b},0\right)$.
+
+-   Budget carbone à ne pas dépasser (@eq-budget-carbone).
+
+Ce programme peut se réécrire sous forme récursive de la manière suivante, à chaque date $t$ [@Stokey1989RecursiveMI], en définissant $$
+V\left(I_t^b,I_t^v,\phi_t^b|K_{t-1}^b,K_{t-1}^v,E_{t-1}\right)=u\left(C_t\right)+\frac{1}{1+\rho}W\left(K_{t}^b,K_{t}^v,E_{t}\right)
+$$ où les variables $\left(K_{t-1}^b,K_{t-1}^v,E_{t-1}\right)$ sont les variables d'état, affectées d'une période à l'autre par les variables de contrôles $\left(I_t^b,I_t^v,\phi_t^b\right)$, et où $$
+W\left(K_{t-1}^b,K_{t-1}^v,E_{t-1}\right)=\max\limits_{I_t^b,I_t^v,\phi_t^b}V\left(I_t^b,I_t^v,\phi_t^b|K_{t-1}^b,K_{t-1}^v,E_{t-1}\right)
+$$ est la valeur atteinte par la fonction d'utilité indirecte, une fois optimisée par rapport aux variables de contrôle, toujours sous les mêmes contraintes exposées ci-dessus.
+
+Le système est alors complètement résolu en définissant les valeurs initiales des variables d'état, et admet une solution unique sous les hypothèses standard de régularité et de convexité des fonctions d'utilité et de production (cf. @Stokey1989RecursiveMI).
+
+## Solutions stationnaires {#sec-solutions-stationnaires}
+
+En l'absence de contrainte carbone, capitaux brun et vert coexistent à l'équilibre stationnaire lorsqu'ils ne sont pas parfaitement substituables dans le processus de production.
+Leurs niveaux respectifs, $K_0^v$ et $K_0^b$, sont alors solutions des équations (cf. `{r} cite_annexe(c("A.1", "A.2"))` pour la démonstration) : $$
+\rho+\delta=\frac{\partial F}{\partial K^b}\left(K_0^b,K_0^v\right)=\frac{\partial F}{\partial K^v}\left(K_0^b,K_0^v\right).
+$$
+
+Considérons le cas où l'économie est initialement stationnaire et où les contraintes carbone sont annoncées à la date $t_0$.
+Au début de l'année $t_0+1$, les niveaux de capital brun et vert installés sont ceux de la fin de l'année $t_0$, correspondant ici à l'état stationnaire.
+Ce n'est qu'à cette date que le planificateur prend des décisions d'investissements et de consommation compatibles avec les contraintes carbone, faisant alors sortir l'économie de son état initial.
+
+Entre $t_0+1$ et $T_E$, les différentes contraintes carbone peuvent s'appliquer (notamment ponctuelles), générant des chocs dans l'économie.
+
+Au-delà de $T_E$, la contrainte ZEN s'impose, et l'environnement redevient stable.
+Le seul capital brun restant est le capital brun résiduel ($\underline{K}^b$), qui sature le puits de carbone.
+À long terme, un nouvel état stationnaire est atteint, tel que l'investissement total maintient la consommation constante.
+Le capital vert final ainsi obtenu ($K^v_\infty$) est solution de l'équation : $$
+\rho+\delta=\frac{\partial F}{\partial K^v}\left(\underline{K}^b,K^v_{\infty}\right).
+$$
+
+## Calibrage
+
+### Les formes fonctionnelles
+
+La fonction de production prend comme intrants les capitaux brun et vert ainsi que le travail : $Y = F(k(K^b,K^v),\bar{L})$, avec $F(k,\bar{L})=k^{\alpha}\bar{L}^{1-\alpha}$ , avec $\bar{L}=1$ par normalisation, et $k$ la fonction de capital synthétique.
+On fait l'hypothèse que celle-ci combine les capitaux brun et vert selon une technologie CES, à élasticité de substitution constante $\sigma$.
+Ainsi : $$
+Y=F\left(k(K^b,K^v),1\right)=\left[\left((a_b K^b)^\frac{\sigma-1}{\sigma}+(a_v K^v)^\frac{\sigma-1}{\sigma}\right)^{\frac{\sigma}{\sigma-1}}\right]^\alpha.
+$$ La forme CES autorise la coexistence du brun et du vert dans les choix d'investissements.
+
+Pour l'utilité, on choisit, classiquement, une forme logarithmique : $u(C)=\ln(C)$.
+
+Les formes choisies sont donc bien concaves (pourvu que $\sigma>1$ dans la fonction de production), ce qui garantit l'existence d'une solution stationnaire au programme du planificateur ainsi que la convergence vers cette solution.
+
+### Initialisation et paramètres structurels
+
+| Variable                | Niveaux de départ |
+|-------------------------|-------------------|
+| PIB                     | 2 426 Mds €       |
+| Capital brun            | 4 481 Mds €       |
+| Capital vert            | 3 667 Mds €       |
+| Émissions brutes de GES | 404 $MtCO_2éq$    |
+
+: Valeurs initiales et observées des grandeurs du modèle {#tbl-val-initiales}
+
+Les valeurs du PIB et du capital net fixe installé total sont initialisées sur 2019, année pour laquelle les grandeurs économiques sont bien connues, mais l'année 2022 est choisie comme année de base pour le démarrage des simulations (@tbl-val-initiales).
+Les émissions de GES sont tirées des inventaires nationaux pour 2022, afin de tenir compte de la décarbonation de l'économie depuis 2019 (@sdes_2023).
+
+Les parts respectives de vert et de brun dans le capital total[^9] sont estimées à partir des chroniques d'investissements climat d'@panoramai4CE[^10].
+
+[^9]: Les comptes de patrimoine de l'Insee ne permettent pas de mesurer directement le capital brun et vert.
+    Par exemple, pour l'énergie, il n'est pas possible de séparer le vert (renouvelable et nucléaire) et le brun (centrales à gaz et à charbon).
+
+[^10]: Les chroniques d'@panoramai4CE sont déclinées selon 5 scénarios, chacun cohérent avec l'objectif ZEN en 2050 : le scénario SNBC et les quatre scénarios "Transitions 2050" de l'Ademe.
+    Pour le calibrage, notre choix s'est porté sur les chroniques relatives au scénario 3, "Technologies vertes", de l'Ademe, qui s'articule autour d'un récit dont la philosophie est proche de celle de notre modèle.
+    On fait l'hypothèse, stylisée, que l'ensemble des investissements répertoriés dans le Panorama visent à remplacer du capital brun par du vert : par exemple, les chaudières à gaz et à fioul sont remplacées par des pompes à chaleur dans le bâtiment, les voitures thermiques par des électriques dans le transport.
+    On choisit de considérer la valeur du capital brun en 2019 comme étant égale au coût de son remplacement à venir par du vert, soit la somme des investissements climat d'une chronique, entre 2019 et 2050.
+    On estime ainsi que 55 % du capital est brun au départ, le reste étant vert.
+
+Dans notre approche, le brun correspond aux biens émissifs ou à la partie émissive d'un bien.
+Par exemple, pour un logement, on peut distinguer sa partie émissive (e.g. chaudière au fioul ou murs mal isolés), qui est du capital brun, et sa partie non émissive (le reste du logement), qui est du capital vert.
+En revanche, quand parties émissive et non émissive ne sont pas séparables, l'ensemble du bien est considéré comme brun.
+Ainsi décarboner le transport passera par le remplacement des voitures thermiques par des voitures électriques, et non par le remplacement des moteurs thermiques par des moteurs électriques et des batteries (par conséquent la voiture thermique est considérée comme étant entièrement du capital brun).
+La distinction entre capital brun et vert est donc dépendante de l'état des technologies existantes : une cimenterie peut être considérée comme du capital brun en raison des émissions de GES induites par sa production.
+Mais au cas où elle serait associée à une technologie efficace de décarbonation de son processus productif, comme un système de captage et de stockage du $CO_2$, elle deviendrait verte.
+
+Rapportées au PIB, les émissions brutes permettent de calculer le coefficient d'émissivité du capital brun $e_b$.
+L'élasticité de substitution $\sigma$ entre capital brun et capital vert est fixée à 3.
+Cette valeur est à la fois cohérente avec la valeur de l'action pour le climat (VAC) en 2050 du rapport @quinet2019[^11] et en ligne avec les estimations empiriques existantes[^12]. Le paramètre $\alpha$ peut, lui, être déduit des valeurs du PIB et des quantités de capitaux brun et vert à l'année initiale : $$
+\alpha=\frac{(\rho+\delta)(K_{2019}^b+K_{2019}^v)}{Y_{2019}}.
+$$
+
+[^11]: Avec une élasticité de substitution de 3 et un puits de carbone de 85 $MtCO_2éq$, compatible avec le puits naturel prévu par @quinet2019 entre 75 et 95 $MtCO_2éq$, le coût d'abattement en 2050 ressort très proche de la VAC obtenue par @quinet2019, soit 775€/$tCO_2$.
+
+[^12]: @papageorgiou2017 proposent ainsi une élasticité entre intrants bruns et verts de 2 dans le secteur de production de l'électricité et proche de 3 dans le reste de l'industrie, au niveau macroéconomique, sur la base d'une estimation faite sur 26 pays entre 1995 et 2009 (France non comprise).
+    @jo2022substitution, elle, trouve des élasticités comprises entre 2 et 5, en se fondant sur des données microéconomiques, pour les entreprises de l'industrie manufacturière en France, entre 1995 et 2015.
+    Cependant il est à noter que les concepts de capital brun et vert retenus chez nous sont plus larges que ceux pris en compte dans la littérature, où seuls les processus de production de certains secteurs sont étudiés, alors qu'ici tous les secteurs d'activité sont pris en compte.
+    Les estimations empiriques ne sont donc pas à même de fournir à elles seules une valeur d'élasticité parfaitement adéquate pour notre modèle.
+
+Les valeurs des paramètres $a_b$ et $a_v$ sont déduites des conditions du premier ordre à l'état stationnaire initial.
+
+Pour le taux de dépréciation du capital, une valeur de 5 % est retenue, proche de celle que l'on peut estimer à partir des données de comptabilité nationale, en rapportant la consommation de capital fixe au capital fixe installé en 2019.
+Le choix du taux d'actualisation, à 2.5 %, découle de l'application de la règle de Ramsey élargie, en suivant @quinet2013, tenant compte des incertitudes sur la croissance économique future.
+Cette valeur peut être interprétée comme un compromis entre les propositions, depuis souvent débattues, de @Stern2006 (1.4 %) et de @Nordhaus2007 (4.5 %) ; elle est aussi dans l'intervalle des valeurs de référence en usage dans les pays de l'OCDE, des Pays-Bas (0 %) au Royaume-Uni (3.5 %) [@OCDE2019].
+
+Le @tbl-calibr présente les valeurs retenues pour les différents paramètres dans la spécification de base.
+
+::: {#tbl-calibr}
+
+| Paramètres structurels                    | Valeur | Plage de valeurs analysées en robustesse |
+|-------------------|---------------|--------------------------------------|
+| $\sigma$                                  | 3.00   | 1.5 - 5.5                                |
+| $e_{b}$                                   | 0.09   | paramètre dérivé                       |
+| $\alpha$                                  | 0.39   |                                          |
+| $a_{b}$                                   | 3.07   | paramètre dérivé                       |
+| $a_{v}$                                   | 2.77   | paramètre dérivé                       |
+| $\rho$                                    | 0.025  | 0.005 - 0.04                             |
+| $\delta$                                  | 0.05   | 0.01 - 0.10                              |
+| Puits de carbone                          | 35     | 5 - 80                                   |
+| $\frac{K_{t_0}^b}{K_{t_0}^b + K_{t_0}^v}$ | 55     | 40 - 90                                  |
+
+Note : $e_{b}$ est exprimé en $kgCO_2éq / €$, le puits de carbone en $MtCO_2éq$, la part initiale du capital brun dans le capital total en %.
+Les autres grandeurs sont sans unité. Les paramètres dérivés sont calculés à partir des autres paramètres.
+Les analyses de robustesse sont disponibles dans `{r} cite_annexe_article("A.4")`.
+
+Valeurs des paramètres du modèle calibré
+:::
+
+Pour ces différents paramètres, des analyses de sensibilité sont conduites, afin de mettre en perspective les principaux messages déduits de la spécification de base (cf `{r} cite_annexe("A.4")`).
+
+Sauf mention contraire, le budget carbone utilisé est de 3.93 $GtCO_2éq$ correspondant à une cible de réchauffement de 1.6 °C, avec probabilité de réussite de 50 %.
+Il est déduit des budgets carbone planétaires estimés par @lamboll.
+La part de la France dans un budget mondial est considérée comme égale à sa part dans la population mondiale en 2019 (soit 0.88 %).
+Les équivalences entre budgets carbone pour la France et réchauffement sont fournis dans `{r} cite_annexe_article("A.3")`.
+
+# Résultats {#sec-resultats}
+
+Nos simulations comparent les conséquences de différents objectifs de décarbonation sur la chronique optimale des investissements bruns et verts, des actifs échoués et de la consommation en France, entre 2023 et 2050 (année de réalisation visée de la neutralité carbone).
+Un scénario de référence, d'inaction climatique, est construit, dépourvu de toute contrainte sur les émissions.
+La comparaison de ce scénario avec les autres permet de mettre en évidence les effets propres des politiques d'atténuation.
+Cette comparaison ne fournit qu'une analyse partielle de bien-être puisque les dommages climatiques, et donc leur plus ou moins grande atténuation dans les scénarios avec contraintes climatiques, ne sont pas modélisés.
+Puis quatre scénarios de décarbonation sont évalués, partageant tous l'objectif ZEN à partir de 2050, avec pour cibles : 1) l'objectif ZEN uniquement, 2) la baisse de 55 % des émissions nettes en 2030 par rapport à leur niveau de 1990 (*Fit for 55*), 3) *Fit for 55* + la baisse de 90 % des émissions nettes en 2040[^13], et 4) la mise en place d'un budget carbone national compatible avec l'objectif de l'accord de Paris (+ 1.6 °C de réchauffement)[^14].
+
+[^13]: Pour arriver à l'objectif ZEN en 2050, la Commission européenne a récemment proposé de mettre en place une cible intermédiaire, en 2040, visant à réduire de 90 % les émissions de GES, relativement à 1990 (<https://commission.europa.eu/news/recommendations-2040-targets-reach-climate-neutrality-2050-2024-02-06_en?prefLang=fr>).
+    Contrairement à l'objectif *Fit for 55*, cette nouvelle cible est encore à l'état de proposition.
+
+[^14]: Le choix d'une cible d'1.6 °C, plutôt que 1.5 °C dans la version la plus ambitieuse de l'accord de Paris, a été fait pour faciliter la résolution numérique du modèle, en allouant au planificateur social un budget carbone plus grand, de 3.93 $GtCO_2éq$, plutôt que de seulement 2.17.
+
+Ensuite, une série de scénarios évalue les effets de l'intensification du ciblage par plafonds annuels d'émissions, avec un ciblage tous les dix, cinq puis deux ans.
+Enfin, trois scénarios de transition retardée sont évalués, selon la date du début de la gestion intertemporelle optimale du budget carbone restant (2023, 2028 ou 2033), après une période où seule la contrainte ZEN s'applique.
+
+À long terme, tous les scénarios de décarbonation présentent un profil analogue, car ils convergent vers un même état stationnaire, respectueux de l'objectif ZEN.
+Dès 2050, leurs trajectoires économiques sont très proches, avec une consommation et un PIB plus faibles que dans le scénario d'inaction.
+
+Les cibles ponctuelles d'émissions maximales de GES, de type *Fit for 55*, s'appliquent en théorie une année seulement, elles ne limitent pas en principe les émissions ultérieures.
+Nos simulations montrent qu'après avoir échoué du capital brun à la date du plafond d'émissions, il peut être optimal de réinvestir dans le capital brun juste après.
+Ce comportement gaspille des ressources et ne réduit que très peu les émissions.
+C'est une conséquence directe de la formulation de la politique climatique, qui ne plafonne les émissions que pour une année.
+En pratique, au lieu d'échouer puis de réinvestir dans du capital brun, les entreprises sous-utiliseraient probablement leur capital brun l'année cible, avec un échouage limité (@rozenberg2020).
+Ce comportement d'évitement ne renseigne pas tant sur la transition en tant que telle, menée par le planificateur social, que sur les politiques publiques mises en œuvre pour l'atteindre.
+Or notre travail vise à éclairer avant tout l'équilibre centralisé de la transition, et non sa décentralisation.
+Nous modélisons donc, dans les différents scénarios, les cibles ponctuelles comme des plafonds qui s'appliquent aussi aux années ultérieures, respectant mieux ainsi l'esprit de la réglementation qui veut conduire à des émissions nettes nulles en 2050.
+Par exemple, pour *Fit for 55*, les émissions nettes ne peuvent dépasser 45 % de leur niveau de 1990, que ce soit en 2030 ou après.
+
+## Scénario sans contrainte carbone
+
+Dans ce scénario, aucune contrainte ne pèse sur les émissions, ni en flux ni en stock.
+En 2022, l'année de base, l'économie est sur un sentier de croissance équilibrée, où investissements verts et bruns coexistent, du fait de leur imparfaite substituabilité dans le processus de production.
+En l'absence de progrès technique et de croissance démographique, l'économie reste stable et ne quitte jamais l'équilibre stationnaire correspondant à la situation initiale.
+Les différentes composantes du PIB gardent leurs niveaux de 2022 tout au long de la trajectoire.
+Les émissions croissent linéairement, ce qui épuise rapidement le budget carbone, en une dizaine d'années.
+
+## Plafonds d'émissions annuels *vs* respect d'un budget carbone {#sec-main-results}
+
+### Zéro émission nette à partir de 2050
+
+Lorsqu'on applique comme seule contrainte la cible de neutralité à l'horizon 2050 (ZEN), les investissements bruns commencent à baisser dès 2025, par rapport au scénario sans contrainte carbone (@fig-scen-zen).
+Leur chute est rapide puisqu'ils tombent, dès 2027, au niveau qui assure juste le renouvellement du capital brun résiduel.
+L'évolution de l'investissement vert se fait en sens inverse : alors qu'il est stable au début à son niveau initial, il augmente nettement entre 2025 et 2027 pour ensuite se stabiliser.
+L'investissement vert augmente à nouveau progressivement à l'approche de 2050, ce qui permet de lisser la consommation et d'atténuer sa baisse induite par l'important échouage du capital brun en 2050.
+En effet, celui-ci provoque une brusque décarbonation de l'économie et une forte réduction des capacités de production, compensée par davantage de capital vert.
+
+La transition du brun au vert est donc assez tardive : ce n'est qu'après plusieurs années que la contrainte ZEN 2050 enclenche vraiment la transition.
+En effet, comme la contrainte est lointaine, le nouveau capital brun acquis dans les premières années est pour partie naturellement déprécié avant l'horizon ZEN.
+Le supplément de productivité du capital brun, cumulé sur longue période, rentabilise la fraction restante et importante de capital brun qui est échouée en 2050 pour atteindre la neutralité.
+
+::: {#fig-scen-zen}
+```{r}
+#| echo: false
+readRDS("images/graph/fiche_zen.RDS")
+```
+
+Note: les émissions de GES sont en $GtCO_2éq$ ; pour les autres graphiques, l'unité est le millier de Md€.
+
+Scénario ZEN 2050
+:::
+
+### *Fit for 55* en 2030 + ZEN à partir de 2050
+
+L'ajout d'une cible intermédiaire en 2030 sur les émissions entraîne une disparition immédiate de l'investissement brun, dont le niveau n'assure plus que le renouvellement du capital brun résiduel dès 2023 (@fig-Scen-Fit-for-55).
+Au même moment, l'investissement vert augmente.
+Il y a donc une avancée de la transition, qui est plus précoce que dans le scénario ZEN et commence dès la première année.
+
+Néanmoins, la non-décroissance du plafond d'émissions après 2030 génère un effet pervers.
+En effet, une fois que le capital brun s'est suffisamment déprécié pour satisfaire la nouvelle contrainte, il devient à nouveau rentable en 2030 d'investir dans le brun pour quelques années encore.
+En résulte une trajectoire en dents de scie : l'investissement brun disparaît dans un premier temps, avant de réapparaître une fois que la contrainte se fait moins sentir, puis de s'éteindre définitivement en 2033[^15].
+
+[^15]: Dans des simulations non reportées ici, nous avons appliqué la contrainte *Fit for 55* seulement en 2030 et pas les années suivantes, ce qui correspondrait à une interprétation à la lettre de cet engagement : en 2030, l'investissement vert s'annule et l'investissement brun augmente nettement ; dès 2032 l'investissement brun retombe au niveau qui stabilise le capital brun résiduel.
+    Le capital brun augmente en 2031, alors qu'il stagne quand la contrainte *Fit for 55* s'applique aux années ultérieures également.
+    Bien que le surcroît de capital brun après 2030 soit modéré par rapport à ce qui est reporté @fig-Scen-Fit-for-55, il s'accompagne d'émissions supplémentaires qui cumulées jusqu'en 2050 représentent 0.15 $GtCO_2éq$.
+
+::: {#fig-Scen-Fit-for-55}
+```{r}
+#| echo: false
+
+readRDS("images/graph/fiche_fitfor55.RDS")
+```
+
+Note: cf @fig-scen-zen
+
+Scénario *Fit for 55*
+:::
+
+### *Fit for 55* en 2030 + $-90$ % en 2040 + ZEN à partir de 2050
+
+L'ajout au scénario *Fit for 55* d'une cible supplémentaire en 2040, de baisse de 90 % des émissions nettes par rapport au niveau de 1990, provoque un nouvel échouage du capital, cette fois en 2040 (@fig-Cible-2040).
+Celui-ci est même l'échouage le plus important de la trajectoire, près de quatre fois supérieur à celui de 2030.
+Cela révèle l'importance de l'effort qu'il reste à faire après 2030, même quand le défi *Fit for 55* a été précédemment relevé avec succès.
+En miroir de la chute brutale du stock de capital brun, les émissions chutent et restent faibles tout au long de la décennie 2040.
+
+::: {#fig-Cible-2040}
+```{r}
+#| echo: false
+readRDS("images/graph/fiche_fitfor5590.RDS")
+```
+
+Note: cf @fig-scen-zen
+
+*Fit for 55* et cible de $-90$ % en 2040
+:::
+
+### Budget carbone à 1.6 °C + ZEN à partir de 2050
+
+La simulation présente la trajectoire optimale de décarbonation permettant de respecter le budget carbone national à 1.6 °C (soit 3.93 $GtCO_2éq$) tout en atteignant l'objectif ZEN en 2050.
+Ici il y a donc deux contraintes : une sur les flux d'émissions (ZEN à partir de 2050), l'autre sur le stock (le cumul d'émissions devant rester inférieur au budget).
+
+La révélation de la contrainte en 2023 déclenche une transition immédiate.
+Dès cette date, l'investissement vert décolle tandis que l'investissement brun (hors renouvellement du brun résiduel) disparaît, définitivement (@fig-scen-BC).
+
+En outre, cette disparition de l'investissement brun ne suffit pas pour réduire suffisamment les émissions de GES.
+Un échouage du capital a lieu régulièrement, mais principalement à deux moments : une fois, massivement, la première année (14 % du capital brun initial), et une seconde fois en 2050 (11 % du capital brun de départ), pour atteindre la neutralité.
+
+::: {#fig-scen-BC}
+```{r}
+#| echo: false
+readRDS("images/graph/fiche_bc.RDS")
+```
+
+Note: cf @fig-scen-zen
+
+Scénario de budget carbone (3.93 $GtCO_2éq$)
+:::
+
+Les résultats obtenus pour ce scénario sont sensibles à la cible de budget carbone $E_{max}$ retenue (@fig-Analyse-sens-E-max).
+Plus le budget carbone est faible, plus l'échouage et l'investissement vert sont élevés.
+Tant que ce budget carbone est inférieur à 5.5 $GtCO_2éq$, l'investissement brun (hors résiduel) est constamment nul.
+Avec des budgets carbone un peu supérieurs, l'investissement brun (hors résiduel) devient positif les premières années, mais reste modéré.
+Quand le budget carbone dépasse le cumul d'émissions du scénario ZEN (6.3 $GtCO_2éq$), ce budget n'est plus contraignant, seule la contrainte ZEN s'applique, et les trajectoires sont donc celles du scénario ZEN.
+
+::: {#fig-Analyse-sens-E-max}
+```{r}
+#| fig-height: 5
+graph_sensibilite("var_Emax")
+```
+
+Note: la baisse moyenne de la consommation représente la moyenne sur la période 2023-2050 de l'écart, en %, de la consommation avec sa valeur initiale.
+Les cumuls d'investissements brun ou vert et d'échouage sont en milliers de Md€.
+
+Analyse de sensibilité : Budget carbone ($E_{max}$)
+:::
+
+### Enseignements des différentes politiques d'atténuation climatique
+
+**Un échouage anticipé ne peut pas se produire avec des cibles ponctuelles d'émissions (ZEN, *Fit for 55*,** $-90$ % en 2040).
+L'investissement brun peut diminuer ou s'arrêter avant que la contrainte sur les émissions ne devienne effective, mais il n'est jamais optimal d'échouer avant la contrainte.
+Intuitivement, si l'on suppose qu'il y a un échouage anticipé dans la trajectoire optimale associée à une cible d'émissions ponctuelle, alors si on conserve les mêmes trajectoires d'investissements vert et brun, qu'on n'échoue rien de manière anticipée et juste ce qu'il faut l'année de la cible pour la respecter, cette nouvelle trajectoire respecte la contrainte d'émissions et offre une consommation actualisée strictement supérieure.
+En effet la consommation y est strictement supérieure entre la date d'échouage anticipé et la date de la contrainte, puisque le capital brun et donc la production y sont strictement supérieurs, avec des investissements identiques.
+De fait, dans le scénario ZEN, on n'observe d'échouage qu'en 2050 ; dans le scénario *Fit for 55* et ZEN, l'échouage a lieu uniquement en 2030 et en 2050 ; et quand y on ajoute la contrainte en 2040, le capital brun est échoué en 2030, 2040 et 2050.
+A contrario le respect d'une contrainte sur le cumul des émissions s'accompagne d'un échouage chaque année, particulièrement massif la première année.
+L'intuition économique sous-tendant ce résultat est importante en termes de politique économique : avec des cibles ponctuelles, il n'y a pas de force économique poussant à un échouage anticipé, ce qui ne permet pas d'étaler suffisamment les efforts dans le temps et conduit à des échouages très importants une année donnée, difficiles à mettre en place en pratique car la génération concernée pourra chercher à reporter dans le futur une partie de la baisse de production, et donc le respect de la contrainte climatique d'autant.
+
+**Le scénario ZEN est compatible avec un réchauffement à 1.8 °C, le scénario *Fit for 55* à 1.75 °C, et celui *Fit for 55 + 90* à 1.65 °C** (@tbl-budget-carbone-temperature).
+Le budget carbone respecte par construction le cumul d'émissions cohérent avec un réchauffement donné.
+Ces résultats reposent sur au moins deux hypothèses importantes, en plus de la modélisation et la calibration : i) dans les autres pays, les émissions cumulées restent également inférieures au budget correspondant à ce réchauffement.
+De fait, l'action en France ne renseigne que sur la part de la France aux efforts mondiaux de limitation du réchauffement.
+Les équivalences entre émissions cumulées de GES en France et réchauffement mondial sont illustratives avant tout.
+ii) les décisions sont optimales dans le cadre du modèle : en effet une infinité d'autres trajectoires peuvent satisfaire les contraintes ; par exemple celle du scénario sans contrainte carbone jusqu'en 2049, puis un échouage massif permettant de réduire le capital brun au niveau du capital résiduel, vérifie la contrainte ZEN ; les émissions cumulées sont alors largement supérieures aux 6.3 $GtCO_2éq$ de la trajectoire optimale vérifiant la contrainte ZEN.
+Mais cette trajectoire n'est pas optimale, car le consommateur préfère lisser la chute brutale de consommation qui a alors lieu en 2050, en consommant moins avant cette date pour augmenter le stock de capital vert.
+
+Quand elle est pérenne, **la décarbonation de l'économie produit un effet sur le climat d'autant plus important que l'horizon est éloigné**, puisque le cumul d'émissions évitées est alors d'autant plus élevé.
+Ainsi le budget carbone correspondant à un réchauffement de 1.6 °C (3.93 $GtCO_2éq$) est épuisé en 2036 avec l'objectif ZEN, en 2038 avec l'objectif *Fit for 55* et en 2039 avec l'objectif supplémentaire de $-90$ % en 2040 -- sans effort, il est épuisé en 2033.
+Si les dates de dépassement de ce budget carbone sont proches pour ces différents scénarios, les contraintes plus fortes ont malgré tout placé l'économie sur une trajectoire d'émissions de GES bien plus faibles, ce qui se matérialise par un réchauffement moins élevé en 2050.
+Les émissions cumulées entre 2023 et 2050 sont inférieures de 39 % dans le scénario ZEN que sans aucune contrainte, et l'écart ne peut que grandir ensuite, puisque la trajectoire ZEN à partir de 2050 n'émet plus de GES, contrairement à la situation initiale.
+Les émissions cumulées baissent de 12 % supplémentaires avec l'objectif *Fit for 55*, à nouveau de 19 % supplémentaires avec l'objectif en 2040.
+Enfin, le respect d'un budget carbone réduit ce cumul d'émissions de 13 % par rapport au scénario *Fit for 55 + 90* + ZEN (les écarts d'émissions cumulées entre deux scénarios se mesurent à l'aire entre les courbes des flux d'émissions, @fig-Scen-Flux-Emissions-scenar, ou directement avec l'écart des courbes de cumul d'émissions, @fig-Scen-Stock-Emissions-scenar).
+
+```{r}
+#| label: fig-Scen-Flux-Emissions-scenar
+#| fig-cap: "Flux d'émissions pour les scénarios Budget Carbone, ZEN, *Fit for 55* et *Fit for 90*"
+#| echo: false
+readRDS("images/graph/comparaison_emissions.RDS")
+```
+
+```{r}
+#| label: fig-Scen-Stock-Emissions-scenar
+#| fig-cap: "Cumul d'émissions pour les scénarios Budget Carbone, ZEN, *Fit for 55* et *Fit for 90*"
+#| echo: false
+readRDS("images/graph/comparaison_emissions_stocks.RDS")
+```
+
+D'un point de vue économique, **ces différentes politiques climatiques ont une incidence différenciée sur le bien-être** (@tbl-scen-comp).
+Les scénarios ZEN, *Fit for 55* et $-90$ % en 2040 entraînent une moindre perte d'utilité et de consommations cumulées actualisées que dans le scénario de respect d'un budget carbone à 1.6°C.
+C'est une vision partielle de la situation, puisque les effets des dommages liés au réchauffement ne sont pas modélisés : l'analyse porte sur les seuls effets des politiques de transition.
+L'effet total sur l'utilité du scénario Budget Carbone à 1.6 °C, la manière la plus efficace de limiter le réchauffement à ce niveau, est d'ailleurs probablement positif dans l'esprit des signataires l'accord de Paris en 2015, qui visait à limiter le réchauffement sous 2 °C, et si possible sous 1.5 °C.
+
+Au premier ordre, plus le niveau d'ambition climatique est élevé, plus le dommage économique à subir est important (et plus les gains liés à de moindres dommages sont élevés).
+Ainsi le respect d'un budget carbone à 1.6 °C entraîne un échouage de capital brun, beaucoup plus précoce et massif qu'avec les cibles ponctuelles ou le respect d'un budget carbone moins contraignant, ce qui réduit production et consommation.
+
+Mais au deuxième ordre, à ambition climatique donnée, différentes politiques dégradent plus ou moins le bien-être[^16].
+Vu autrement, à perte de bien-être donnée, la trajectoire des investissements et de l'échouage peut être optimisée de manière à réduire les émissions du système productif, et donc les dommages climatiques.
+Ainsi le scénario ZEN et le respect d'un budget carbone à 1.75 °C génèrent le même niveau de bien-être et de consommations cumulées sur toute la période, mais les émissions cumulées jusqu'en 2050 sont légèrement plus élevées dans le scénario ZEN que dans le scénario budget carbone (6.3 vs 6.2 $GtCO_2eq$).
+Par construction, le scénario budget carbone maximise le bien-être sous contrainte de respecter ce budget carbone, ce qui assure qu'à cumul de GES donné, ce scénario offre une perte d'utilité moindre qu'avec des contraintes ponctuelles sur les émissions.
+En particulier, un échouage anticipé peut avoir lieu dans un scénario budget carbone, ce qui n'est pas le cas face à ces contraintes ponctuelles.
+
+[^16]: Il y a plusieurs niveaux de non-optimalité: pour un objectif de réchauffement donné, avec un comportement optimal, différents instruments pénalisent plus ou moins le bien-être ; et les comportements peuvent aussi ne pas être optimaux, par exemple parce que la décentralisation de l'équilibre centralisé est complexe à mettre en œuvre, ce qui dépasse le cadre de notre analyse.
+
+Les scénarios de cibles ponctuelles retardent la transition par rapport à celui de budget, ce qui se traduit par un cumul plus important d'investissements bruns, qui sont à la fois plus forts et plus durables.
+Pour ce qui est de l'échouage, comme il y a davantage de capital brun accumulé, il y a aussi plus d'actifs à mettre au rebut en fin de période, car ce n'est pas seulement le capital initial qui est concerné par l'échouage, dans ces scénarios, mais également celui qui a été accumulé tout au long de la trajectoire.
+
+**Dans tous les scénarios de transition, l'investissement total est en moyenne inférieur à ce qu'on observe initialement.** En effet, la fonction de production étant concave en fonction du capital, le stock de capital étant déterminé par sa productivité marginale nécessairement égale à $\rho + \delta$ (cf @sec-solutions-stationnaires), et le capital vert étant moins productif que le brun, le stock de capital vert et brun résiduel à l'état final post transition est inférieur au stock de capital brun et vert initial.
+Par rapport à l'état initial, l'investissement total est donc forcément plus faible à l'équilibre final, et il ressort aussi plus faible en moyenne durant la transition dans tous les scénarios étudiés.
+L'investissement total peut ponctuellement être plus élevé qu'à l'état initial (ce qui est par exemple le cas dans les scénarios ZEN et *Fit for 55* à l'approche de 2050).
+
+::: {#tbl-scen-comp}
+```{r}
+#| echo: false
+data <- data.frame(rowname = rownames(all_table$tabbaseline), all_table$tabbaseline)
+colnames(data)[-1] <- colnames(all_table$tabbaseline)
+data$group_row <- c(rep("", 8), 
+                    rep("Consommation", 3),
+                    rep("PIB", 3))
+data$rowname <- 
+  gsub("\\w+ en niveau", "Niveau", data$rowname)
+table <- data |> 
+  gt(groupname_col = "group_row") |> 
+  fmt_number(decimals = 2, sep_mark = " ", rows = c(1, 2, 11, 14)) |> 
+  fmt_number(decimals = 0, sep_mark = " ", rows = c(3:10, 12, 13)) |> 
+  cols_align(
+    align = c("center")
+  )
+
+table |> 
+  cols_width(
+    c(`Sans contrainte carbone`) ~ pct(12),
+    c(`Budget Carbone 1.6°C et ZEN`) ~ pct(12),
+    c(`Budget Carbone 1.75°C et ZEN`) ~ pct(12),
+    c(`ZEN`) ~ pct(12),
+    c(`Fit for 55`) ~ pct(12),
+    c(`Fit for 55 + 90`) ~ pct(12),
+    everything() ~ pct(28)
+  )
+```
+
+Note : Les grandeurs représentées (hors %) correspondent à des moyennes annuelles actualisées.
+L'écart d'utilité correspond à l'écart (en %) d'utilité intertemporelle actualisée par rapport au scénario sans contrainte carbone.
+
+Émissions et grandeurs économiques selon les différentes contraintes carbone
+:::
+
+## Cibles d'émissions tous les 10, 5 ou 2 ans + ZEN à partir de 2050
+
+Plutôt que respecter un budget carbone, les différents pays du monde ont opté en pratique pour des cibles d'émissions, avec en particulier une date pour leur neutralité carbone, et parfois des objectifs intermédiaires comme *Fit for 55*.
+Mais comme l'ont montré nos simulations (@sec-main-results), des cibles trop éloignées dans le temps entraînent une transition trop tardive et des à-coups dans les efforts, avec un relâchement sitôt une étape franchie, ce qui n'est pas optimal.
+Une solution naturelle est alors d'introduire une autre cible intermédiaire, dans le cas européen entre 2030 et 2050 : avant même d'être contraignante et de réduire fortement les émissions en 2040, la cible en 2040 permet d'abaisser la trajectoire des émissions durant la décennie 2030 en empêchant l'investissement brun de repartir début 2030 (@fig-Scen-Flux-Emissions-scenar).
+
+Introduire des cibles intermédiaires d'émissions peut ainsi permettre de rapprocher les trajectoires des trajectoires optimales respectant un objectif climatique donné.
+De fait, avec des plafonds d'émissions correspondant chaque année entre 2023 et 2049 aux émissions du scénario budget carbone à 1.6 °C, la solution obtenue coïncide avec la trajectoire optimale de ce budget carbone (@tbl-inter-cibles).
+Pour déterminer à quel point il est important de rapprocher les cibles ponctuelles, nous construisons plusieurs scénarios qui respectent des cibles ponctuelles d'émissions, espacées régulièrement de 10, 5 ou 2 ans, et choisies à partir de la chronique d'émissions du scénario optimal de respect d'un budget carbone donné.
+
+**Des cibles intermédiaires fréquentes apparaissent importantes pour des objectifs ambitieux, mais pas pour des objectifs peu ambitieux.** Dans les scénarios respectant un budget carbone élevé, supérieur à 5.5 $GtCO_2éq$, il n'y a pas d'échouage anticipé (sur 2023-2049) ; les solutions des scénarios avec des jalons tous les 10, 5 et 2 ans, choisis en accord avec la chronique d'émissions du scénario budget carbone correspondant, coïncident avec celle du scénario budget carbone (cf @fig-Scen-Cibles-regulieres1.75 avec un budget carbone associé à 1.75 °C, de 6.23 $GtCO_2éq$).
+Ainsi, le problème fondamental de l'instrument cible ponctuelle, qui est de ne pas pouvoir déclencher d'échouage avant que la contrainte ne devienne effective, n'est plus problématique quand le budget carbone est élevé et qu'il n'y a pas d'échouage anticipé dans la trajectoire du scénario budget carbone.
+En revanche, dans les scénarios avec un budget carbone inférieur, il y a un échouage anticipé de capital[^17].
+Les solutions correspondant aux jalons intermédiaires à 10, 5 ou 2 ans s'écartent alors de la trajectoire optimale du budget carbone, d'autant plus que i) le budget carbone est faible, et donc l'échouage anticipé élevé, et ii) ces jalons sont espacés les uns des autres.
+Ainsi, en partant d'un budget carbone de 1.6 °C, les émissions cumulées sur 2023-2050 atteignent avec des cibles décennales 4.25 $GtCO_2éq$, près de 10 % supérieures aux 3.93 $GtCO_2éq$ du budget carbone associé.
+Ce cumul d'émissions atteint 4.08 $GtCO_2éq$ avec des cibles tous les 5 ans et dépasse à peine le budget carbone avec des cibles tous les 2 ans.
+Ces écarts de chemins ne proviennent pas des investissements bruns et verts, qui sont très proches dans les différentes simulations, mais de l'échouage de capital brun, qui n'intervient qu'au moment où le plafond d'émissions est contraignant : l'échouage est plus faible avec des cibles espacées, ce qui se traduit en moyenne sur la période par un capital productif plus élevé, et donc une production, une consommation et une utilité plus élevées.
+
+[^17]: Cet échouage anticipé commence en 2034 et reste présent jusqu'en 2050 avec un budget de 5.4 $GtCO_2éq$.
+
+En définitive, il ressort que pour atteindre un objectif de réchauffement maximal donné, introduire explicitement cette contrainte, sous la forme d'un budget carbone restant, permet de minimiser le coût économique associé.
+Une trajectoire proche d'une telle trajectoire optimale associée au respect d'un budget carbone peut être obtenue avec des plafonds d'émissions régulièrement espacés dans le temps, qui s'appliquent dès la première année, et choisis à partir de la chronique d'émissions de cette trajectoire optimale.
+Quand l'objectif climatique est ambitieux, rapprocher dans le temps ces jalons intermédiaires réduit la dérive qui peut se produire entre ces jalons.
+
+```{r}
+#| label: fig-Scen-Cibles-regulieres1.6
+#| fig-cap: "Cibles régulières d'émissions, Budget Carbone 1.6\ °C"
+
+zen_interm_pib <- readRDS("images/graph/zen_interm_pib.RDS")
+wrap_plots(zen_interm_pib$z1.6, ncol = 2) +
+  plot_layout(guides = 'collect')&
+  labs(color = "Cibles tous les",
+       linetype = "Cibles tous les")
+```
+
+```{r}
+#| label: fig-Scen-Cibles-regulieres1.75
+#| fig-cap: "Cibles régulières d'émissions, Budget Carbone 1.75\ °C"
+
+wrap_plots(zen_interm_pib$z1.75, ncol = 2) +
+  plot_layout(guides = 'collect')&
+  labs(color = "Cibles tous les",
+       linetype = "Cibles tous les")
+```
+
+::: {#tbl-inter-cibles}
+```{r}
+#| echo: false
+
+data <- data.frame(rowname = rownames(all_table$tabInterm1.6), all_table$tabInterm1.6)
+colnames(data)[-1] <- gsub("Cibles ", "", colnames(all_table$tabInterm1.6),
+                           ignore.case = TRUE)
+data$group_row <- c(rep("", 8), 
+                    rep("Consommation", 3),
+                    rep("PIB", 3))
+data$rowname <- 
+  gsub("\\w+ en niveau", "Niveau", data$rowname)
+table <- data |> 
+  gt(groupname_col = "group_row") |> 
+  fmt_number(decimals = 2, sep_mark = " ", rows = c(1, 2, 11, 14)) |> 
+  fmt_number(decimals = 0, sep_mark = " ", rows = c(3:10, 12, 13)) |>
+  tab_spanner(
+    label = "Cibles",
+    columns = 2:5
+  ) |> 
+  cols_align(
+    align = c("center")
+  )
+
+table |> 
+  cols_width(
+    c(`Annuelles`,
+      `Tous les 2 ans`,
+      `Tous les 5 ans`,
+      `Tous les 10 ans`) ~ pct(13),
+    everything() ~ pct(35)
+  )
+```
+
+Notes : Les cibles d'émissions sont fixées égales aux émissions de la trajectoire optimale respectant un budget carbone de 3.93 $GtCO_2éq$, cohérent avec un réchauffement limité à 1.6 °C.
+Des cibles annuelles entraînent la même solution que le respect du budget carbone (cf colonne Budget Carbone 1.6 °C et ZEN du @tbl-scen-comp).
+Les grandeurs représentées (hors %) correspondent à des moyennes annuelles actualisées.
+L'écart d'utilité correspond à l'écart (en %) d'utilité intertemporelle actualisée par rapport au scénario sans contrainte carbone.
+
+Des cibles ponctuelles d'émissions plus rapprochées rapprochent l'économie de la trajectoire optimale respectant le budget carbone à 1.6°C
+:::
+
+## Une transition retardée dégrade le bien-être
+
+Nous avons vu que le scénario budget carbone + ZEN correspondait à la politique optimale pour assurer le respect du budget carbone et l'atteinte de l'objectif ZEN.
+Se pose néanmoins la question de la date de sa mise en place.
+En effet, d'après @ngfs2021, une transition retardée est plus coûteuse.
+Il serait possible d'étudier, comme @ngfs2021, les conséquences du respect d'un budget carbone à une date future, après une certaine période d'inaction.
+Cela se traduirait peu ou prou par le décalage dans le temps d'un scénario budget carbone respectant un cumul d'émissions amputé des GES émis pendant cette période d'inaction (@fig-Analyse-sens-E-max).
+Plutôt que de supposer un effort nul jusqu'à la décision de respecter un budget carbone, nous supposons que l'économie suit la trajectoire ZEN à partir de 2023 puis, à une date donnée et jusqu'en 2050, bascule sur un sentier compatible avec le respect d'un budget carbone à 1.6 °C -- ce qu'il en reste.
+Trois dates de bascule sont retenues : 2023, 2028, et 2033[^18].
+Puisque le cumul d'émissions et donc les dommages sont les mêmes dans ces différents scénarios, les bien-être sont directement comparables.
+
+[^18]: Comme le scénario ZEN épuise le budget carbone correspondant à 1.6 °C en 2036, il n'est pas possible d'étudier une bascule ultérieure, à moins d'introduire des émissions nettes négatives, ce qui sort du cadre de notre modèle.
+
+**Il en ressort qu'à cumul d'émissions donné, plus la transition est tardive, plus elle est coûteuse, et moins elle est crédible.** En effet, plus le démarrage de la trajectoire respectant un budget carbone donné pour 2023-2050 est tardif, plus une part importante de ce budget est déjà consommée au moment de cette bascule, et plus le stock de capital brun doit être réduit fortement pour émettre très peu de GES sur la durée restante avant 2050 (@fig-scen-demarrage-transition).
+L'année de changement de politique, l'échouage est deux fois supérieur avec un changement en 2028 plutôt qu'en 2023, et trois fois supérieur avec un changement en 2033 (à un niveau qui frôle 2000 milliards d'euros).
+Dans le cas d'un changement en 2033, le budget carbone est déjà quasiment épuisé (avec le scénario ZEN, il est épuisé en 2036), les émissions chutent d'environ 60 % entre 2032 et 2033 (@fig-Scen-em-differe).
+En miroir, avec une transition plus tardive, la consommation et le bien-être sont plus pénalisés : ils baissent respectivement de 0.9 et 1.6 point de plus avec une bascule en 2033 plutôt qu'en 2023, par rapport à un scénario sans contrainte carbone (@tbl-bcdiffere).
+En outre, retarder la transition ne la rend en aucun cas plus crédible: au contraire, tout retard implique une chute d'autant plus brutale de la consommation lorsque la politique d'émissions est finalement ajustée à l'objectif.
+
+```{r}
+#| label: fig-scen-demarrage-transition
+#| fig-cap: "Budget carbone 1.6\ °C avec différentes dates de démarrage de la transition"
+zen_bc_pib <- readRDS("images/graph/zen_bc_pib.RDS")
+wrap_plots(zen_bc_pib$z1.6 , ncol = 2)  +
+  plot_layout(guides = 'collect') &
+  labs(color = "Démarrage en",
+       linetype = "Démarrage en") 
+```
+
+```{r}
+#| label: fig-Scen-em-differe
+#| fig-cap: "Flux d'émission pour le budget carbone 1.6\ °C avec différentes dates de démarrage de la transition"
+readRDS("images/graph/em_flux_bcdiff.RDS")
+```
+
+::: {#tbl-bcdiffere}
+```{r}
+#| echo: false
+
+data <- data.frame(rowname = rownames(all_table$tabRetard1.6), all_table$tabRetard1.6)
+colnames(data)[-1] <- gsub("Budget Carbone ", "", colnames(all_table$tabRetard1.6),
+                           ignore.case = TRUE)
+data$group_row <- c(rep("", 8), 
+                    rep("Consommation", 3),
+                    rep("PIB", 3))
+data$rowname <- 
+  gsub("\\w+ en niveau", "Niveau", data$rowname)
+table <- data |> 
+  gt(groupname_col = "group_row") |> 
+  fmt_number(decimals = 2, sep_mark = " ", rows = c(1, 2, 11, 14)) |> 
+  fmt_number(decimals = 0, sep_mark = " ", rows = c(3:10, 12, 13)) |>
+  tab_spanner(
+    label = "Budget carbone",
+    columns = 2:5
+  ) |> 
+  cols_align(
+    align = c("center")
+  )
+table |> 
+  cols_width(
+    c(`2023`,
+      `2028`,
+      `2033`) ~ pct(20),
+    everything() ~ pct(40)
+  )
+```
+
+Note : Les grandeurs représentées (hors %) correspondent à des moyennes annuelles actualisées.
+L'écart d'utilité correspond à l'écart (en %) d'utilité intertemporelle actualisée par rapport au scénario sans contrainte carbone.
+
+Une transition retardée entraîne plus d'échouage et pénalise le bien-être
+:::
+
+## Coûts d'ajustement et lissage temporel de l'échouage
+
+Les trajectoires optimales respectant les différentes contraintes climatiques font souvent apparaître des échouages très importants une année donnée : l'année d'entrée en vigueur d'une contrainte ponctuelle sur les émissions (comme ZEN ou *Fit for 55*) ou l'année de mise en place d'une politique respectant un budget carbone donné.
+De tels échouages, qui peuvent s'élever à 600 milliards d'euros la première année pour le respect du budget carbone à 1.6 °C, voire le double si cette politique n'est mise en place que 5 ans plus tard, semblent peu réalistes (@fig-scen-demarrage-transition).
+Il est probable que pour réduire les conflits intergénérationnels qui en découlent, l'effort soit lissé dans le temps.
+Nous introduisons donc un coût à échouer du capital dans la fonction d'utilité, croissant et convexe (en pratique quadratique) en la quantité de capital échoué : échouer une unité supplémentaire de capital brun est donc plus coûteux que l'unité précédente.
+
+L'introduction de ces coûts provoque un lissage de l'échouage, plus ou moins étalé dans le temps selon l'importance de ces coûts.
+Dans le cas d'un scénario avec contrainte de budget carbone à 1.6 °C, pour des coûts d'échouage modérés, l'échouage est réduit de moitié en 2023 et d'un tiers en 2050 et il est étalé sur les années juste après 2023 et avant 2050 (@fig-Scen-cout-echouage).
+Pour des coûts d'échouage élevés, l'échouage est divisé par 6-7 en 2023 et 2050 et est largement réparti sur toute la période, avec un déclin très progressif jusqu'en 2050.
+À cause de la baisse limitée du capital brun en début de période, les émissions baissent plus lentement qu'avec des coûts modérés ou nuls, l'économie doit donc être plus proche de la neutralité en fin de période pour compenser le surcroît d'émissions du début de période.
+Ces coûts d'échouage du capital sont réalistes : en 2023, ils représentent 0.1 % de l'utilité initiale quand ils sont modérés, et 1.0 % quand ils sont élevés.
+Ils permettent de mettre en évidence des chroniques d'échouage du capital brun plus crédibles, par leurs montants comme par leur profil temporel.
+
+::: {#fig-Scen-cout-echouage}
+```{r}
+#| fig-height: 5
+(wrap_plots(readRDS("images/graph/pib_ca.RDS") , ncol = 2)  +
+  plot_layout(guides = 'collect')) &
+  labs(color = "Coûts d'échouage",
+       linetype = "Coûts d'échouage")
+```
+
+Note : En 2023, les coûts d'échouage représentent 0.1 % de l'utilité initiale quand ils sont modérés, et 1.0 % quand ils sont élevés.
+
+Fiches de PIB, coûts d'échouage du capital
+:::
+
+# Discussion - Conclusion {#sec-conclusion}
+
+Nous construisons un modèle de choix optimal d'investissement en capital brun, dont l'utilisation émet des gaz à effet de serre (GES), ou vert, qui n'en émet pas, sous des contraintes climatiques qui peuvent prendre la forme de plafonds ponctuels d'émissions de GES (ZEN ou *Fit for 55*) ou le respect d'un budget carbone.
+Nous décrivons les transitions optimales entre un état initial et la neutralité carbone qui respectent ces différents types de contraintes.
+L'analyse de bien-être est nécessairement partielle, puisque les dommages, qui sont différents suivant les scénarios, ne sont pas modélisés.
+Il est ceci dit possible de tirer des conclusions plus définitives en comparant des simulations aboutissant au même cumul d'émissions de GES.
+
+Avec les trajectoires optimales, et en retenant les équivalences mentionnées entre émissions et réchauffement, le scénario ZEN est compatible avec un réchauffement à 1.8 °C, le scénario Fit for 55 à 1.75 °C, et celui Fit for 55 + 90 à 1.65 °C.
+Nous montrons par ailleurs qu'un échouage anticipé ne peut pas se produire avec des cibles ponctuelles d'émissions.
+Pour limiter le réchauffement à un niveau donné, introduire explicitement cette contrainte sous la forme d'un budget carbone restant minimise le coût économique associé : l'échouage est alors élevé la première année avec des budgets limités.
+Il est possible de s'en approcher avec des plafonds d'émissions régulièrement espacés dans le temps, qui s'appliquent dès la première année, et limitant les émissions au niveau de la chronique d'émissions de cette trajectoire optimale.
+Ensuite, à cumul d'émissions donné, une transition plus tardive est plus coûteuse, conduit à plus d'échouage, et est moins crédible.
+En outre, des coûts à l'échouage permettent de répartir l'échouage dans le temps.
+Enfin, l'investissement total durant la transition et à l'état final est systématiquement inférieur à celui de l'état initial.
+
+Ce dernier résultat semble s’opposer à ce que trouvent la plupart des études sur ce sujet: en effet  @panoramai4CE et @rapportpfm2023 décrivent des besoins supplémentaires d’investissements pour la transition, souvent massifs, de l’ordre de 2 % du PIB chaque année d’ici 2030.
+Deux pistes peuvent être avancées pour tenter de réconcilier ces résultats avec ceux de notre modélisation. 
+En premier lieu, il convient d’observer que les projections de surcroît d’investissement recouvrent au moins en partie un surcoût de l’investissement (autrement dit, une hausse de son prix pour une même capacité productive, plutôt qu’une hausse de volume).
+Avec la transition, un même service rendu coûte plus cher avec du capital vert qu’avec du capital brun. 
+En second lieu, s’il est clair que le remplacement accéléré d’équipements bruns par des équipements propres (par exemple le remplacement de chaudières au fioul ou au gaz encore fonctionnelles par des pompes à chaleur) implique une hausse du volume d’investissement net de ces équipements par rapport à un scénario sans transition, il faut tenir compte de la possibilité d’effets d’équilibre général pouvant réduire d’autres investissements. 
+Ces mécanismes d’équilibre général, intégrés par construction dans notre modélisation, ne le sont pas dans les estimations établies selon une méthode bottom up, y compris les effets d’offre résultant de la composante de surcoût. 
+Or, la contrainte climatique étant fondamentalement une contrainte additionnelle à la frontière de production, il est optimal d’avoir un stock de capital total plus faible après la transition. 
+Ainsi, nos résultats de repli de l’investissement total en volume dans le chemin de transition optimal ne sont pas nécessairement incompatibles avec les projections de surcroît d’investissement en valeur pour ceux des biens d’investissement les plus directement concernés par la transition, mais des travaux complémentaires seraient utiles pour réconcilier ces deux jeux de résultats, notamment en séparant la composante de prix de celle de volume dans les projections usuelles, et en examinant les conséquences en équilibre général de la hausse du coût de l’investissement. 
+
+Nos résultats quantitatifs peuvent être sensibles à la calibration des paramètres du modèle.
+Plusieurs enseignements peuvent en être tirés (`{r} cite_annexe("A.4")`).
+
+-   Plus le capital se déprécie vite, plus il faut investir pour maintenir l'outil de production: les investissements verts et bruns augmentent avec $\delta$; moins il est nécessaire d'échouer du capital brun pour réduire les émissions, puisqu'il se déprécie naturellement rapidement.
+    Il apparaît donc important de verdir avant tout le capital à longue durée de vie.
+
+-   La transition est d'autant plus facile que les capitaux bruns et verts sont interchangeables, c'est-à-dire que l'élasticité de substitution entre brun et vert et forte.
+
+-   La diminution observée récemment du puits de carbone complique la transition, à travers deux mécanismes: avec une baisse de l'absorption d'une partie des émissions d'origine humaine, l'état de zéro émissions nettes est plus difficile à atteindre (il faut un stock de capital brun plus faible, donc plus d'échouage), et le cumul d'émissions nettes d'ici 2050 est plus élevé.
+
+-   Avec une préférence plus forte pour le présent (un taux d'actualisation plus élevé), les générations vivant en fin de période sont moins valorisées que celles vivant en début de période.
+    Dans le scénario budget carbone, en échange d'une consommation plus soutenue en début de période, la consommation baisse plus en fin de période, ainsi qu'en moyenne sur 2023-2050.
+    Dans les scénarios ZEN et *Fit for 55*, l'investissement brun et l'échouage sont plus élevés.
+
+Tous nos résultats décrivent les trajectoires optimales, déterminées par un planificateur social omniscient, omnipotent et bienveillant.
+Ces trajectoires optimales peuvent être difficiles à mettre en place en pratique dans le monde réel.
+Nous laissons l'identification de ces principaux écueils et des stratégies pour les contourner pour des recherches plus approfondies.
+
+
+# Annexes {.unnumbered}
+
+## A.1 Programme récursif de maximisation avec expression des contraintes {.unnumbered}
+
+Afin d'analyser les propriétés théoriques du programme d'optimisation, le programme est réécrit de façon récursive.
+
+### A.1.1 Présentation du programme {.unnumbered}
+
+Les variables d'état sont $\left(\tilde{K}_{t-1}^b,K_{t-1}^v,E_{t-1}\right)$.
+Les variables de contrôle à chaque date sont $\left(I_t^b,I_t^v,\phi_t^b\right)$.
+
+Le programme s'écrit de façon récursive en considérant toutes les contraintes[^19] : $$
+\begin{array}{llc}
+V\left(\tilde{K}_{t-1}^b,K_{t-1}^v,E_{t-1}\right) = &
+\max\limits_{I_t^b,I_t^v,\varphi_t^b}  
+u\left(F\left(\tilde{K}_{t-1}^b(1-\varphi_t^b)+\underline{K}^b,K_t^v\right)-I_t^b-I_t^v\right)
++\frac{1}{1+\rho}V\left(\tilde{K}_t^b,K_t^v,E_t\right) &  \\
+& \mathrm{s.c.}  & \\
+& I_t^b \geq 0 &  (\gamma_t^b) \\
+&I_t^v \geq 0 &  (\gamma_t^v) \\
+&\varphi_t^b \geq 0 & (\alpha_t) \\
+&\varphi_t^b \leq 1 & (\beta_t) \\
+& e_t=e_b\tilde{K}_{t-1}^b(1-\varphi_t^b) \leq \min\left(\bar{E}_t, BC-E_{t-1}\right) & (\mu_t) \\
+&K_t^b=\tilde{K}_{t-1}^b\left(1-\varphi_t^b\right)\left(1-\delta\right)+I_t^b  &   \\
+&K_t^v=K_{t-1}^v\left(1-\delta\right)+I_t^v  &   \\
+&E_t=E_{t-1}+e_b\tilde{K}_{t-1}^b(1-\varphi_t^b)  &   \\
+\end{array}
+$$
+
+[^19]: Dans les développements suivants, on désigne par capital brun le capital brun non résiduel.
+
+On peut intégrer les contraintes directement dans le programme en réécrivant le lagrangien de façon récursive de la façon suivante :
+
+$$
+\begin{array}{llc}
+& \mathcal{L}\left(\tilde{K}_{t-1}^b,K_{t-1}^v,E_{t-1}\right) & \\
+=\min\limits_{\gamma_t^b,\gamma_t^v,\alpha_t,\beta_t,\mu_t \geq 0} \max\limits_{I_t^b,I_t^v,\varphi_t^b}  &
+u\left(F\left(\tilde{K}_{t-1}^b(1-\varphi_t^b)+\underline{K}^b,K_t^v\right)-I_t^b-I_t^v\right)
++\frac{1}{1+\rho}\mathcal{L}\left(\tilde{K}_t^b,K_t^v,E_t\right) &  \\
+& + \gamma_t^b I_t^b +\gamma^v_t I_t^v  & \\
+& + \alpha_t \varphi_t^b + \beta_t \left(1-\varphi_t^b\right) & \\
+&  + \mu_t \left(\min\left(\bar{E}_t, BC-E_{t-1}\right)-
+e_b\left(\tilde{K}_{t-1}^b(1-\varphi_t^b)\right)\right) &\\
+\mathrm{s.c.}  & & \\
+&\tilde{K}_t^b=\tilde{K}_{t-1}^b\left(1-\varphi_t^b\right)\left(1-\delta\right)+I_t^b  &   \\
+&K_t^v=K_{t-1}^v\left(1-\delta\right)+I_t^v  &   \\
+&E_t=E_{t-1}+e_b\tilde{K}_{t-1}^b(1-\varphi_t^b)  &   \\
+\end{array}
+$$ Les équations d'Euler s'expriment en dérivant le Lagrangien par rapport aux variables d'état:
+
+$$
+\begin{array}{lll}
+\frac{\partial\mathcal{L}}{\partial \tilde{K}^b_{t-1}} &=& (1-\varphi_t)\left[ u'(C_t)\frac{\partial F}{\partial K^b_t}-\mu_te_b  +\frac{1-\delta}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^b_{t}}+\frac{e_b}{1+\rho}\frac{\partial\mathcal{L}}{\partial E_t}\right]\\
+\frac{\partial \mathcal{L}}{\partial K^v_{t-1}} &=& u'(C_t)\frac{\partial F}{\partial K^v_t}+\frac{1-\delta}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^v_{t}} \\
+\frac{\partial \mathcal{L}}{\partial E_{t-1}} &=& -\mu_t 1\left\{BC-E_{t-1}<\bar{E}_t\right\} 
++\frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial E_{t}}\\
+\end{array}
+$$
+
+où $\frac{\partial F}{\partial K_b^t}=\frac{\partial F}{\partial K_b}\left(K_{1-1}^b(1-\varphi_t^b),K_{t-1}^v\right)$.
+Par ailleurs, les conditions de premier ordre par rapport aux variables de contrôle amènent :
+
+$$
+\begin{array}{lll}
+u'(C_t) & =  \gamma_t^b + \frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^b_{t}}\\
+u'(C_t) & =  \gamma_t^v + \frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^v_{t}}\\
+\alpha_t-\beta_t  
+& =  \left[ u'(C_t)\frac{\partial F}{\partial K^b_t} 
+-\mu_t e_b  + \frac{1-\delta}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^b_{t}}+\frac{e_b}{1+\rho}\frac{\partial\mathcal{L}}{\partial E_t}\right]K_{t-1}^b
+\end{array}
+$$
+
+L'analyse économique du problème conduit à exclure les cas où l'investissement vert est nul (notamment en présence de la contrainte environnementale et dans le cas d'une fonction de production CES).
+Donc $\gamma_t^v=0$, et $$
+\frac{\partial \mathcal{L}}{\partial K^v_{t-1}} = \frac{1}{1+\rho}\left(\frac{\partial F}{\partial K^v}+1-\delta\right)\frac{\partial \mathcal{L}}{\partial K^v_{t}}.
+$$
+
+Les équations portant sur les dérivées du Lagrangien par rapport aux différentes variables de contrôle indiquent comment les contraintes se transmettent d'une période à l'autre.
+La contrainte budget carbone conduit ainsi à déprécier le Lagrangien par rapport au capital brun, même lorsque la contrainte portant sur les émissions carbone n'est pas saturée ($\mu_t=0$).
+
+### A.1.2 Caractérisation de l'état stationnaire en présence de contraintes carbone {.unnumbered}
+
+On suppose l'existence d'un état stationnaire de l'économie, telle que les différentes grandeurs du modèle prennent les mêmes valeurs.
+Les conditions d'existence et de convergence vers l'état stationnaire sont vérifiées dans le cadre standard lorsque les fonctions d'utilité et de production sont concaves (cf. @merceniermichel1994).
+
+À l'état stationnaire sans contrainte carbone, investissements brun et vert coexistent, tels que les conditions de premier ordre sont vérifiées : $$
+u'(C_0)  = \frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^b_{0}}= \frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^v_{0}}.
+$$
+
+D'après les équations d'Euler, écrites à leur situation stationnaire, on obtient, sans contrainte carbone : $$\begin{array}{llc}
+\frac{\partial \mathcal{L}}{\partial \tilde{K}^b_0} &=&  u'(C_0)\frac{\partial F}{\partial K^b_0}+\frac{1-\delta}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^b_0}\\
+\frac{\partial \mathcal{L}}{\partial K^v_{0}} &=& u'(C_0)\frac{\partial F}{\partial K^v_0}+\frac{1-\delta}{1+\rho}\frac{\partial \mathcal{L}}{\partial K^v_{0}} 
+\end{array}$$ ce qui amène : $$
+\frac{\partial F}{\partial K^b}\left(\tilde{K}^b_0+\underline{K}^b,K_0^v\right)=\frac{\partial F}{\partial K^v}\left(\tilde{K}^b_0+\underline{K}^b,K_0^v\right)=\rho+\delta.
+$$
+
+Ces deux équations définissent les niveaux de capital vert et brun à leur état stationnaire sans contrainte.
+Les niveaux d'investissement se déduisent des équations de flux : $I^j_0=K_0^j/\delta$, $j=v,b$, et la consommation se déduit : $C_0=u'^{-1}\left(F(\tilde{K}_0^b+\underline{K}^b,K_0^v)-\delta(I_0^b+I_0^v)\right)$.
+
+À l'état stationnaire en présence de contraintes carbone, il ne peut y avoir d'investissement brun ou de capital brun, sinon les émissions croîtraient sans limite, donc $I_{\infty}^b=0$ et $K_{\infty}^b=\underline{K}_b$, le capital brun résiduel.
+La saturation de la contrainte sur l'investissement brun implique donc $\gamma^b_{\infty}=u'(C_{\infty})$.
+
+Il n'y a donc que de l'investissement vert.
+Son niveau est défini par l'équation d'Euler relative au capital vert et la condition du premier ordre portant sur l'investissement vert : $$\begin{array}{lll}
+\frac{\partial\mathcal{L}}{\partial K^v_\infty}&=&u'(C_\infty)\frac{\partial F}{\partial K^v_{\infty}}+\frac{1-\delta}{1+\rho}\frac{\partial\mathcal{L}}{\partial K^v_\infty}\\
+u'(C_\infty)&=&\frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial K_\infty^v}
+\end{array}
+$$
+
+Ce qui amène : $$
+\frac{\partial F}{\partial K^v}\left(\underline{K}_b,K^v_\infty\right)=\rho+\delta.
+$$ Cette équation permet d'en déduire la valeur du capital vert à l'équilibre stationnaire en l'absence de capital brun non résiduel.
+
+À l'état stationnaire, le niveau d'investissement vert ne sert qu'à compenser la dépréciation du capital et est donné par $I_\infty^b=\delta K_\infty^v$.
+Enfin, le niveau de consommation se déduit de la contrainte de production $C_\infty=F\left(0,K^v_\infty\right)-\delta K_\infty^v$.
+
+On peut alors en déduire la valorisation marginale du capital vert dans l'économie : $\frac{\partial\mathcal{L}}{\partial K_\infty^v}=(1+\rho)u'(C_\infty)$.
+
+L'absence de capital brun rend les contraintes sur le niveau d'échouage inopérantes, laissant la valeur de $\varphi_\infty^b$ indéterminée.
+Pour que l'équation d'Euler portant sur le capital brun soit vérifiée, il faut donc $\frac{\partial \mathcal{L}}{\partial K^b_{\infty}}=0$ et $$
+u'(C_{\infty})\frac{\partial F}{\partial K^b_{\infty}}-\mu_{\infty}e_b+\frac{e_b}{1+\rho}\frac{\partial \mathcal{L}}{\partial E_{\infty}}=0.
+$$ Or la stationnarité de l'équation d'Euler portant sur les émissions carbone implique : $$
+\frac{\partial \mathcal{L}}{\partial E_\infty}=-\mu_\infty+\frac{1}{1+\rho}\frac{\partial \mathcal{L}}{\partial E_\infty},
+$$ ce qui amène à $\frac{\partial \mathcal{L}}{\partial E_\infty}=-(\frac{1+\rho}{\rho})\mu_\infty$.
+
+Finalement, on en déduit la valeur de la contrainte d'émissions à l'état stationnaire : $$
+\mu_\infty=\frac{u'(C_{\infty})}{e_b}\frac{\rho}{1+\rho}\frac{\partial F}{\partial K_b}.
+$$
+
+Dans le cas où il n'y a pas de contrainte sur le budget carbone, mais seulement l'obligation ZEN à partir d'une date donnée, l'équilibre n'est modifié que sur le calcul de la valorisation de la contrainte d'émission : le terme lié à l'accumulation des émissions n'apparaît alors plus dans l'équation et on obtient $$ 
+u'(C_{\infty})\frac{\partial F}{\partial K_b}-\mu_{\infty}e_b=0.
+$$ Ce qui amène $$
+\mu_\infty=\frac{u'(C_{\infty})}{e_b}\frac{\partial F}{\partial K_b}.
+$$
+
+De fait, considérer que les contraintes portant sur les émissions sont liées à l'obligation ZEN ou bien au budget carbone (lorsqu'elles sont confondues) ne fait que modifier la définition de $\mu_t$.
+Les variables de contrôle décrivant l'évolution des grandeurs économiques sont inchangées par ce choix.
+
+## A.2 Résolution numérique du modèle {.unnumbered}
+
+La résolution du programme du planificateur se fait par une approximation numérique, inspirée de @merceniermichel1994.
+Il s'agit d'utiliser l'équivalence asymptotique entre ce programme et un autre, exprimé en temps fini.
+
+Dans ce cadre, le programme du planificateur, appliqué au cas où n'existe qu'une seule forme de capital, s'étend sur une séquence de moments finis $t(1), \ldots,t(N)$, avec $N \rightarrow +\infty$ : $$
+\begin{cases}
+\max\limits_{0\leq i_{t(1)},\ldots,i_{t(N-1)}\leq 1} \sum_{n=1}^{N-1}\alpha_n u\left((1-i_{t(n)}) F\left(K_{t(n)}\right)\right)+\frac{\alpha_{N-1}}{\rho} u\left(F\left(K_{t(N)}\right)-\delta K_{t(N)}\right)\\
+\mathrm{s.c.} \\
+K_{t(n+1)}-K_{t(n)}=\Delta_n \left(-\delta K_{t(n)}+i_{t(n)} F\left(K_{t(n)}\right)\right)
+\end{cases}
+$$ où $\Delta_n = t(n+1)-t(n)$, et $\alpha_{n+1}=\frac{\alpha_n}{1+\rho \Delta_n}$, le dernier niveau de consommation atteint correspondant à celui obtenu dans le cas où le niveau de capital resterait constant et que les investissements ne feraient plus que compenser la dépréciation du capital.
+D'après @merceniermichel1994, ce programme est asymptotiquement équivalent à celui exprimé plus haut.
+
+@merceniermichel1994 proposent une manière optimale de déterminer les pas de temps $t(n)$, en linéarisant le modèle autour de sa solution stationnaire.
+Néanmoins dans la pratique on choisit de faire coïncider le début de la séquence aux années comprises entre l'année de base, 2019, et la première année à zéro émission nette, $T_E$.
+Au-delà de cette date, on fait vieillir le modèle, année après année, jusqu'en 2120, ce qui assure la convergence du modèle vers sa solution stationnaire.
+
+Pour l'application numérique, l'écriture du critère ci-dessus est adaptée pour introduire les deux types d'investissement et la part de capital brun échoué à chaque date comme variables de contrôle.
+Dans l'estimation de base, il s'agit de maximiser le critère par rapport à 151 variables : 27 variables correspondant au choix d'investissement brun (de 2023 à 2050, puisque après 2050, le niveau d'investissement est nul de part la contrainte ZEN), 97 variables correspondant au choix d'investissement vert (de 2023 à 2120) et 27 variables correspondant à la part de capital échoué (de 2023 à 2050).
+La nature du programme d'optimisation fait que les variables correspondant à l'investissement brun et à l'échouage sont aux bornes des intervalles de variation.
+Nous utilisons donc l'algorithme d'optimisation `L-BFGS-B` (implémenté dans la routine `optim` de `R`) adapté lorsque les contraintes appliquées sur les variables sont simples, ce qui est le cas de celles portant sur l'investissement ou l'échouage.
+Toutefois, des contraintes plus complexes portant sur les émissions carbone sont également introduites dans le modèle, pouvant affecter la recherche de solutions optimisant le critère retenu.
+
+Pour traiter ces difficultés, nous avons appliqué deux stratégies.
+D'une part nous avons considéré le lagrangien du problème de maximisation pour la seule contrainte budget carbone, ce qui conduit à modifier le programme de la façon suivante : $$
+\max\limits_{
+\substack{\tilde{I}^b_1,\ldots,\tilde{I}^b_{T_E}\geq 0\\
+\phi^b_1,\ldots,\phi^b_{T_E}\geq 0\\
+I^v_1,\ldots,I^v_t,\ldots \geq 0
+}} \sum\limits_{t=t_0}^{+\infty}\frac{u\left(C_t\right)}{(1+\rho)^{t-t_0}}+\lambda \left(BC-\sum_{t=1}^{T_E-1}e_t\right)
+$$
+
+$\lambda$ est alors un prix (exprimé en unité d'utilité) appliqué aux émissions, qui correspond, dans le modèle stationnaire exprimé dans la section précédente à la quantité $\frac{\partial \mathcal{L}}{\partial E}_0$.
+Plus $\lambda$ est élevé, plus la contrainte portant sur la somme des émissions est forte et plus le cumul final des émissions est faible (jusqu'à $T_E-1$, puisque, après $T_E$ la contrainte ZEN s'applique et il n'y a plus d'émissions).
+À $\lambda$ donné, les valeurs des variables (investissement, échouage) sont estimées par optimisation du programme.
+La valeur de $\lambda$ finalement retenue est celle pour laquelle la somme des émissions carbone correspond à la contrainte Budget Carbone.
+
+D'autre part, afin de se prémunir du risque que l'algorithme d'optimisation converge vers des minima locaux ne correspondant pas à la bonne solution, plusieurs tirages aléatoires des valeurs initiales sont tirées selon une loi uniforme dans les intervalles de variation de ces variables (soit dans $\left[0,1\right]^{151}$).
+La solution retenue est celle minimisant les solutions associées à chacune de ces valeurs initiales.
+
+## A.3 Données complémentaires {.unnumbered}
+
+::: {#tbl-budget-carbone-temperature}
+```{r}
+#| echo: false
+
+budget_carbone_temperature$rowname <- rownames(budget_carbone_temperature)
+  budget_carbone_temperature |> 
+    gt() |>
+    tab_spanner(
+      label = "Cible de réchauffement visée",
+      columns = seq_len(ncol(budget_carbone_temperature))
+    ) |> 
+  fmt_number(decimals = 0, sep_mark = " ", rows = 1) |> 
+  fmt_number(decimals = 2, sep_mark = " ", rows = 2) |> 
+    cols_align(
+      align = c("center")
+    )
+```
+
+Notes : les budgets carbone monde correspondant à 1.65 °C et 1.75 °C ne sont pas fournis dans @lamboll, ils sont obtenus comme la moyenne des budgets carbone monde 1.6 °C et 1.7 °C, et 1.7 °C et 1.8 °C respectivement.
+La part de la France dans la population mondiale, de 0.88 %, détermine la part du budget monde alloué à la France.
+
+Source : @lamboll ; calculs des auteurs.
+
+Budget carbone pour le monde et la France selon la cible de réchauffement visée ($GtCO_2éq$)
+:::
+
+## A.4 Analyse de sensibilité des résultats au calibrage {.unnumbered}
+
+Les simulations se fondent sur l'utilisation de paramètres calibrés, dont les valeurs sont tirées d'autres publications, ou bien estimées selon des hypothèses, nécessaires, mais simplificatrices.
+Une analyse de sensibilité permet de mesurer l'incidence du choix des paramètres initiaux sur les principaux résultats du modèle.
+Il est pertinent de l'appliquer à l'ensemble des paramètres de calibrage, statiques et dynamiques (la part initiale du capital brun dans le capital total, le taux de dépréciation du capital ($\delta$), l'élasticité de substitution entre capital brun et capital vert ($\sigma$), la taille du puits et le taux d'actualisation ($\rho$)) et de la décliner par scénario.
+Sont distingués ici les paramètres les plus « basiques » du modèle, dans le sens où les autres s'en déduisent.
+Ainsi, les productivités du capital brun et vert dans la fonction de production CES se déduisent de ces paramètres de base Pour chacune des simulations sont représentées l'évolution de la consommation ainsi que certaines variables résumant la dynamique de remplacement du capital brun par le capital vert : le cumul des investissements bruns, celui des investissements verts, la date du dernier investissement brun et le cumul du capital brun échoué (en proportion du PIB de 2019).
+Pour chaque jeu de paramètres, les simulations sont conduites pour les 4 différents scénarios présentés en première partie des résultats : le scénario ZEN 2050 (zéro émission nette à partir de 2050), ZEN + *Fit for 55* (limitation des émissions nettes à partir de l'année 2030), ZEN + *Fit for 55* + baisse des émissions nettes de 90 % en 2040, et respect d'un budget carbone de 3.93 $GtCO_2éq$ correspondant à une cible de réchauffement de 1.6 °C.
+
+### A.4.1 Part initiale du capital brun {.unnumbered}
+
+```{r}
+#| label: fig-Analyse-sens-K-b
+#| fig-cap: "Analyse de sensibilité : part initiale du capital brun"
+#| echo: false
+#| fig-height: 5
+graph_sensibilite("var_part_K_b")
+```
+
+Le cumul du capital échoué sur toute la période s'avère très sensible à la proportion de capital brun présent au départ.
+En doublant cette part, on double en même temps le montant de l'échouage dans le scénario de budget carbone (@fig-Analyse-sens-K-b).
+Il passe ainsi de 70 % du PIB 2019 à 140 %, lorsque la part du capital brun passe de 40 à 80 % du capital total (l'hypothèse centrale étant à 55 %).
+Donc plus il y a de capital brun en 2019 et plus la transition est coûteuse : renoncer à l'investissement brun ne suffit pas, il faut aussi jeter davantage de capital émissif.
+La part du brun induit également un effet, paradoxal, sur le profil des chroniques d'investissements : plus elle est forte, et plus l'investissement brun s'arrête tardivement et son montant cumulé augmente.
+Cela s'explique par la façon dont le modèle est calibré initialement.
+La plupart des paramètres le sont à partir de données exogènes, sauf $a_b$, $a_v$ et $e_b$, qui sont déduits des valeurs initiales des variables endogènes et des autres paramètres.
+Par conséquent, plus la part du capital brun est forte en 2019, 1) plus l'émissivité de ce même capital est faible, car le flux d'émissions de départ reste, lui, inchangé ; et 2) plus le capital brun est productif par rapport au capital vert.
+Et plus le planificateur social investit dans le capital brun tardivement.
+
+### A.4.2 Taux de dépréciation du capital {.unnumbered}
+
+```{r}
+#| label: fig-Analyse-sens-delta
+#| fig-cap: "Analyse de sensibilité : taux de dépréciation du capital ($\\delta$)"
+#| fig-height: 5
+graph_sensibilite("var_delta")
+```
+
+La valeur du taux de dépréciation joue un rôle important, à la fois sur la chronique des investissements et le montant de capital brun échoué.
+En effet, plus le capital se déprécie vite, 1) plus il faut investir pour maintenir l'outil de production: les investissements verts et bruns augmentent avec $\delta$; 2) moins il est nécessaire d'échouer du capital brun pour réduire les émissions, puisqu'il se déprécie naturellement rapidement.
+Il peut même devenir possible d'investir durablement dans le capital brun, même dans le scénario de respect d'un budget carbone, avec une dépréciation très élevée (@fig-Analyse-sens-delta).
+
+Un modèle plus granulaire pourrait inclure une hétérogénéité du taux de dépréciation.
+Cela permettrait de différencier les conclusions sur le rythme optimal de transition selon les secteurs et activités, en fonction des durées de vie des biens capitaux.
+Il apparaît ainsi important de verdir avant tout le capital à longue durée de vie.
+
+### A.4.4 Élasticité de substitution {.unnumbered}
+
+```{r}
+#| label: fig-Analyse-sens-Sigma
+#| fig-cap: "Analyse de sensibilité : Élasticité de substitution brun / vert ($\\sigma$)"
+#| fig-height: 5
+graph_sensibilite("var_sigma")
+```
+
+La transition apparaît comme d'autant plus facile que les capitaux bruns et verts sont interchangeables, c'est-à-dire que l'élasticité de substitution entre brun et vert est forte.
+Quand $\sigma$ croît, le cumul de l'investissement brun diminue et la date de son abandon est plus précoce.
+L'investissement vert est stimulé par la plus grande substituabilité entre les deux formes de capital.
+Comme les investissements bruns sont plus faibles, il y a également moins de capital échoué.
+Cette accélération de la transition est due à ce que l'écart de productivité entre brun et vert est fonction décroissante de l'élasticité : donc plus celle-ci est forte, et plus la performance relative du vert par rapport au brun s'améliore.
+Quand les deux types de capitaux sont très peu substituables, il est très coûteux en PIB de décarboner l'économie: le PIB à l'état stationnaire est plus faible que quand ces capitaux sont très substituables.
+Si la consommation est plus élevée en moyenne sur la période 2023-2050 pour des valeurs plus faibles de sigma, elle est en revanche plus faible à l'état stationnaire.
+
+### A.4.5 Puits de carbone {.unnumbered}
+
+```{r}
+#| label: fig-Analyse-sens-Puits-carbone
+#| fig-cap: "Analyse de sensibilité : Puits de carbone"
+#| fig-height: 5
+graph_sensibilite("var_puits")
+```
+
+Quant au puits de carbone, quand il croît, l'objectif ZEN devient plus facile à atteindre, et le cumul des investissements verts diminue (@fig-Analyse-sens-Puits-carbone).
+De même, l'investissement brun disparaît plus rapidement, car il correspond au surplus d'investissement au-delà de ce qui est nécessaire pour remplacer le capital résiduel.
+La taille du puits affecte également le montant des actifs échoués, notamment pour la gestion du budget carbone.
+En effet, à émissions brutes données, un puits plus important réduit le niveau des émissions nettes et facilite le respect du budget carbone, qui est un objectif exprimé en net.
+En conséquence, il devient moins dur de réduire le stock de capital à son niveau résiduel, et moins d'échouage est nécessaire pour y arriver.
+
+### A.4.6 Taux d'actualisation {.unnumbered}
+
+```{r}
+#| label: fig-Analyse-sens-Rho
+#| fig-cap: "Analyse de sensibilité : Taux d'actualisation ($\\rho$)"
+#| fig-height: 5
+graph_sensibilite("var_rho")
+```
+
+La hausse du taux d'actualisation $\rho$ entraîne une augmentation des investissements bruns et un recul des investissements verts (@fig-Analyse-sens-Rho).
+En effet, ce taux représente un arbitrage entre le présent et l'avenir, une valeur plus élevée de $\rho$ étant associée à une préférence plus forte pour le présent.
+Avec une préférence plus forte pour le présent, les générations vivant en fin de période sont moins valorisées que celles vivant en début de période: à long terme, l'épargne est plus basse, donc le PIB et la consommation sont plus faibles à l'état stationnaire.
+Dans le scénario budget carbone, en échange d'une consommation plus soutenue en début de période, la consommation baisse plus fortement en fin de période, ainsi qu'en moyenne sur toute la période.
+
+\newpage
+
+# Références {.unnumbered}

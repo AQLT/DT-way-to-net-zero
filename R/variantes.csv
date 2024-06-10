@@ -1,0 +1,10 @@
+param_name,variable
+var_rho,rho
+var_puits,epuits
+var_delta,delta_1
+var_delta_1,delta_1
+var_part_K_b,part_K_b
+var_Emax,Emax
+var_sigma,sigma
+var_CA_fin,CA_fin
+var_Cout_ajust,Cout_Ajust

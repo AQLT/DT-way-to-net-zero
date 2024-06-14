@@ -8,6 +8,8 @@ Ce dépôt contient tous les programmes du document de travail
 **Abbas R., Carnot N., Lequien M., Quartier-la-Tente A. et Roux S. (2024)**, *En chemin vers la neutralité carbone. Mais quel chemin ?*,
 Document de travail Insee, G2024/11.
 
+Il est disponible à l'adresse : <https://www.insee.fr/fr/statistiques/8203278>.
+
 Pour citer cet article :
 
     @article{inseeDTG202411,

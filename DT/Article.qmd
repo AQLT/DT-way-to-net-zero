@@ -498,7 +498,7 @@ Le @tbl-calibr présente les valeurs retenues pour les différents paramètres d
 | Puits de carbone                          | 35     | 5 - 80                                   |
 | $\frac{K_{t_0}^b}{K_{t_0}^b + K_{t_0}^v}$ | 55     | 40 - 90                                  |
 
-Note : $e_{b}$ est exprimé en $kgCO_2éq /$€, le puits de carbone en $MtCO_2éq$, la part initiale du capital brun dans le capital total en %.
+Note : $e_{b}$ est exprimé en $kgCO_2éq / \text{€}$, le puits de carbone en $MtCO_2éq$, la part initiale du capital brun dans le capital total en %.
 Les autres grandeurs sont sans unité. Les paramètres dérivés sont calculés à partir des autres paramètres.
 Les analyses de robustesse sont disponibles dans `{r} cite_annexe_article("A.4")`.
 
